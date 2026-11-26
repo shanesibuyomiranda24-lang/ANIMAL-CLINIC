@@ -1,0 +1,190 @@
+.clinic-banner {
+  position: relative;
+  isolation: isolate;
+  box-sizing: border-box;
+  width: 100%;
+  height: 320px;
+  min-height: 320px;
+  margin: 0 0 16px;
+  padding: clamp(26px, 4.2vw, 48px);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  overflow: hidden;
+  color: #fff;
+  background:
+    linear-gradient(105deg, rgba(0, 31, 54, .96), rgba(1, 91, 140, .78)),
+    url("../images/Banner.png") center 48% / cover no-repeat;
+  border: 1px solid rgba(255, 255, 255, .18);
+  border-radius: 18px;
+  box-shadow: 0 10px 28px rgba(0, 46, 74, .2);
+}
+
+.clinic-banner::after {
+  position: absolute;
+  z-index: -1;
+  right: 5%;
+  bottom: -70px;
+  width: 250px;
+  height: 250px;
+  content: "";
+  border: 1px solid rgba(255, 255, 255, .2);
+  border-radius: 50%;
+  box-shadow: 0 0 0 22px rgba(255, 255, 255, .04), 0 0 0 48px rgba(255, 255, 255, .035);
+  pointer-events: none;
+}
+
+.clinic-banner-copy {
+  position: relative;
+  z-index: 1;
+  width: min(620px, 100%);
+}
+
+.clinic-banner-eyebrow {
+  width: max-content;
+  max-width: 100%;
+  margin: 0 0 12px;
+  padding: 7px 11px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #d4f1ff;
+  background: rgba(255, 255, 255, .1);
+  border: 1px solid rgba(255, 255, 255, .18);
+  border-radius: 999px;
+  font-size: .68rem;
+  font-weight: 800;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+.clinic-banner-eyebrow::before {
+  width: 7px;
+  height: 7px;
+  flex: none;
+  content: "";
+  background: #7ee0b3;
+  border-radius: 50%;
+  box-shadow: 0 0 0 4px rgba(126, 224, 179, .16);
+}
+
+.clinic-banner h2 {
+  margin: 0 0 10px;
+  color: #fff;
+  font-size: clamp(1.8rem, 3.8vw, 2.7rem);
+  line-height: 1.1;
+}
+
+.clinic-banner-copy > p:not(.clinic-banner-eyebrow) {
+  max-width: 58ch;
+  margin: 0 0 20px;
+  color: #e3f2fb;
+  font-size: .96rem;
+}
+
+.clinic-banner-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+}
+
+.clinic-banner-actions .button {
+  min-height: 43px;
+  transition: transform .16s ease, box-shadow .16s ease;
+}
+
+.clinic-banner .button.light {
+  color: #002e4a;
+  background: #fff;
+  border-color: #fff;
+}
+
+.clinic-banner .button.ghost {
+  color: #fff;
+  background: transparent;
+  border-color: rgba(255, 255, 255, .7);
+}
+
+.clinic-banner .button.ghost:hover {
+  background: rgba(255, 255, 255, .15);
+  border-color: rgba(255, 255, 255, .7);
+}
+
+.clinic-banner-actions .button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 7px 16px rgba(0, 0, 0, .18);
+}
+
+.clinic-banner-clock {
+  position: relative;
+  z-index: 1;
+  flex: 0 0 auto;
+  padding: 14px 18px;
+  display: grid;
+  gap: 3px;
+  color: #fff;
+  background: rgba(0, 31, 54, .22);
+  border: 1px solid rgba(255, 255, 255, .24);
+  border-radius: 14px;
+  text-align: right;
+  backdrop-filter: blur(3px);
+}
+
+.clinic-banner-clock strong {
+  color: #fff;
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -.01em;
+  font-variant-numeric: tabular-nums;
+}
+
+.clinic-banner-clock span,
+.clinic-banner-clock time {
+  color: #e3f2fb;
+  font-size: .84rem;
+}
+
+@media (max-width: 760px) {
+  .clinic-banner {
+    height: auto;
+    min-height: 220px;
+    padding: 24px 20px;
+    align-items: flex-start;
+    flex-direction: column;
+    justify-content: center;
+  }
+
+  .clinic-banner::after {
+    right: -120px;
+  }
+
+  .clinic-banner-clock {
+    padding: 0;
+    background: transparent;
+    border: 0;
+    text-align: left;
+    backdrop-filter: none;
+  }
+
+  .clinic-banner-clock strong {
+    font-size: 1.25rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .clinic-banner h2 {
+    font-size: clamp(1.55rem, 7vw, 2rem);
+  }
+
+  .clinic-banner-eyebrow {
+    font-size: .61rem;
+    letter-spacing: .09em;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .clinic-banner-actions .button {
+    transition: none;
+  }
+}

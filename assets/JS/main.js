@@ -1,0 +1,1 @@
+/* Shared clinic application JavaScript. */

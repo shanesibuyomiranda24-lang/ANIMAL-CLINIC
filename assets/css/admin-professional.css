@@ -1,0 +1,972 @@
+:root {
+  --admin-sidebar-width: 224px;
+  --admin-shell-bg: #f3f7fb;
+  --admin-border: #d7e5ef;
+  --admin-muted: #42637e;
+  --admin-navy: #002e4a;
+  --admin-blue: #015b8c;
+  --admin-cyan: #0284c7;
+}
+
+body.admin-dashboard,
+body.role-app.admin,
+body.role-app.vet {
+  background: var(--admin-shell-bg) !important;
+}
+
+html:has(body.admin-dashboard),
+html:has(body.role-app.admin),
+html:has(body.role-app.vet),
+body.admin-dashboard,
+body.role-app.admin,
+body.role-app.vet {
+  overflow: hidden;
+  scrollbar-width: none;
+}
+
+html:has(body.admin-dashboard)::-webkit-scrollbar,
+html:has(body.role-app.admin)::-webkit-scrollbar,
+html:has(body.role-app.vet)::-webkit-scrollbar,
+body.admin-dashboard::-webkit-scrollbar,
+body.role-app.admin::-webkit-scrollbar,
+body.role-app.vet::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
+body.admin-dashboard .app-shell,
+body.role-app.admin .app-shell,
+body.role-app.vet .app-shell {
+  grid-template-columns: var(--admin-sidebar-width) minmax(0, 1fr) !important;
+  transition: grid-template-columns .22s ease;
+}
+
+html.admin-sidebar-collapsed body.admin-dashboard .app-shell,
+html.admin-sidebar-collapsed body.role-app.admin .app-shell,
+html.vet-sidebar-collapsed body.role-app.vet .app-shell,
+body.admin-sidebar-collapsed .app-shell,
+body.sidebar-collapsed .app-shell,
+body.vet-sidebar-collapsed .app-shell {
+  --admin-sidebar-width: 76px;
+  grid-template-columns: 76px minmax(0, 1fr) !important;
+}
+
+body.admin-dashboard .sidebar,
+body.role-app.admin .sidebar,
+body.role-app.vet .sidebar {
+  width: var(--admin-sidebar-width);
+  max-width: 360px;
+  min-width: 76px;
+  padding: 18px 10px 14px;
+  height: 100vh;
+  height: 100dvh;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-width: none;
+  transition: width .22s ease, padding .22s ease, transform .22s ease;
+  box-shadow: 5px 0 18px rgba(0, 46, 74, .08);
+}
+
+body.admin-dashboard .sidebar::-webkit-scrollbar,
+body.role-app.admin .sidebar::-webkit-scrollbar,
+body.role-app.vet .sidebar::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
+body.admin-dashboard .app-shell,
+body.role-app.admin .app-shell,
+body.role-app.vet .app-shell {
+  min-width: 0;
+}
+
+body.admin-resizing .app-shell,
+body.admin-resizing .sidebar,
+body.vet-resizing .app-shell,
+body.vet-resizing .sidebar {
+  transition: none;
+}
+
+html.admin-sidebar-collapsed body.admin-dashboard .sidebar,
+html.admin-sidebar-collapsed body.role-app.admin .sidebar,
+html.vet-sidebar-collapsed body.role-app.vet .sidebar,
+body.admin-sidebar-collapsed .sidebar,
+body.sidebar-collapsed .sidebar,
+body.vet-sidebar-collapsed .sidebar {
+  width: 76px !important;
+  padding-inline: 8px;
+}
+
+body.admin-dashboard .brand-lockup,
+body.role-app.admin .brand-lockup,
+body.role-app.vet .brand-lockup {
+  margin: 0 0 20px;
+  transition: margin .22s ease;
+}
+
+body.admin-dashboard .brand-logo,
+body.role-app.admin .brand-logo,
+body.role-app.vet .brand-logo {
+  width: 82px;
+  height: 82px;
+  transition: width .22s ease, height .22s ease;
+}
+
+html.admin-sidebar-collapsed body.admin-dashboard .brand-logo,
+html.admin-sidebar-collapsed body.role-app.admin .brand-logo,
+html.vet-sidebar-collapsed body.role-app.vet .brand-logo,
+body.admin-sidebar-collapsed .brand-logo,
+body.sidebar-collapsed .brand-logo,
+body.vet-sidebar-collapsed .brand-logo {
+  width: 52px;
+  height: 52px;
+}
+
+html.admin-sidebar-collapsed body.admin-dashboard .brand-copy,
+html.admin-sidebar-collapsed body.admin-dashboard .nav-item span,
+html.admin-sidebar-collapsed body.role-app.admin .brand-copy,
+html.admin-sidebar-collapsed body.role-app.admin .nav-item span,
+html.vet-sidebar-collapsed body.role-app.vet .brand-copy,
+html.vet-sidebar-collapsed body.role-app.vet .nav-item span,
+body.admin-sidebar-collapsed .brand-copy,
+body.admin-sidebar-collapsed .nav-item span,
+body.sidebar-collapsed .brand-copy,
+body.sidebar-collapsed .nav-item span,
+body.vet-sidebar-collapsed .brand-copy,
+body.vet-sidebar-collapsed .nav-item span {
+  display: none !important;
+}
+
+html.admin-sidebar-collapsed body.admin-dashboard .nav-item,
+html.admin-sidebar-collapsed body.role-app.admin .nav-item,
+html.vet-sidebar-collapsed body.role-app.vet .nav-item,
+body.admin-sidebar-collapsed .nav-item,
+body.sidebar-collapsed .nav-item,
+body.vet-sidebar-collapsed .nav-item {
+  grid-template-columns: 1fr;
+  justify-items: center;
+  padding-inline: 8px;
+}
+
+body.admin-dashboard .side-nav,
+body.role-app.admin .side-nav,
+body.role-app.vet .side-nav {
+  gap: 6px;
+}
+
+body.admin-dashboard .nav-item,
+body.role-app.admin .nav-item,
+body.role-app.vet .nav-item {
+  min-height: 44px;
+  border-radius: 9px;
+  font-size: .86rem;
+}
+
+body.admin-dashboard .nav-item.active,
+body.role-app.admin .nav-item.active,
+body.role-app.vet .nav-item.active {
+  background: #0284c7;
+  box-shadow: inset 3px 0 0 rgba(255, 255, 255, .7);
+}
+
+body.role-app.admin .nav-item:first-child svg path,
+body.role-app.vet .nav-item:first-child svg path {
+  fill: currentColor;
+  stroke: none;
+}
+
+body.role-app.vet .vet-pet-cell {
+  min-width: 150px;
+  white-space: nowrap;
+}
+
+body.role-app.vet .vet-pet-thumb {
+  width: 38px;
+  height: 38px;
+  margin-right: 8px;
+  display: inline-grid;
+  place-items: center;
+  vertical-align: middle;
+  object-fit: cover;
+  border: 1px solid #d7e8f5;
+  border-radius: 50%;
+}
+
+body.role-app.vet .vet-pet-thumb-empty {
+  color: #015b8c;
+  background: #eaf3fa;
+  font-weight: 700;
+}
+
+body.role-app.vet .vet-pet-cell strong {
+  vertical-align: middle;
+}
+
+.sidebar-resizer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 20;
+  width: 8px;
+  height: 100%;
+  cursor: ew-resize;
+  touch-action: none;
+}
+
+.sidebar-resizer::after {
+  position: absolute;
+  top: 50%;
+  left: 3px;
+  width: 2px;
+  height: 42px;
+  content: "";
+  background: rgba(255, 255, 255, .38);
+  border-radius: 999px;
+  transform: translateY(-50%);
+  opacity: 0;
+  transition: opacity .15s ease;
+}
+
+.sidebar:hover .sidebar-resizer::after,
+.sidebar-resizer:hover::after {
+  opacity: 1;
+}
+
+body.admin-resizing,
+body.admin-resizing *,
+body.vet-resizing,
+body.vet-resizing * {
+  cursor: ew-resize !important;
+  user-select: none !important;
+}
+
+.admin-hamburger {
+  width: 40px;
+  height: 40px;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  flex: 0 0 40px;
+  place-items: center;
+  color: #015b8c;
+  background: #fff;
+  border: 1px solid #d7e8f5;
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(0, 46, 74, .06);
+  cursor: pointer;
+  transition: background .15s ease, border-color .15s ease, transform .15s ease;
+}
+
+.admin-hamburger:hover {
+  background: #eaf3fa;
+  border-color: #b8d2e5;
+}
+
+.admin-hamburger:focus-visible {
+  outline: 3px solid rgba(2, 132, 199, .28);
+  outline-offset: 2px;
+}
+
+.admin-hamburger svg {
+  width: 21px;
+  height: 21px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-width: 2;
+}
+
+body.admin-dashboard .topbar-leading,
+body.role-app.admin .topbar-leading,
+body.role-app.vet .topbar-leading {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+body.admin-dashboard .topbar,
+body.role-app.admin .topbar,
+body.role-app.vet .topbar {
+  min-height: 68px;
+  padding: 10px 22px;
+}
+
+body.admin-dashboard .topbar-title h1,
+body.role-app.admin .topbar-title h1,
+body.role-app.vet .topbar-title h1 {
+  font-size: 1.28rem;
+}
+
+body.admin-dashboard .topbar-title p,
+body.role-app.admin .topbar-title p,
+body.role-app.vet .topbar-title p {
+  margin-top: 1px;
+  font-size: .78rem;
+}
+
+body.admin-dashboard .page-content,
+body.role-app.admin .page-content,
+body.role-app.vet .page-content {
+  width: 100% !important;
+  max-width: none !important;
+  margin: 0 !important;
+  padding: 18px 22px 26px;
+  background: #f3f7fb;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: #9fc5df #eef6fc;
+}
+
+body.admin-dashboard .page-content::-webkit-scrollbar,
+body.role-app.admin .page-content::-webkit-scrollbar,
+body.role-app.vet .page-content::-webkit-scrollbar {
+  width: 8px;
+}
+
+body.admin-dashboard .page-content::-webkit-scrollbar-track,
+body.role-app.admin .page-content::-webkit-scrollbar-track,
+body.role-app.vet .page-content::-webkit-scrollbar-track {
+  background: #eef6fc;
+}
+
+body.admin-dashboard .page-content::-webkit-scrollbar-thumb,
+body.role-app.admin .page-content::-webkit-scrollbar-thumb,
+body.role-app.vet .page-content::-webkit-scrollbar-thumb {
+  background: #9fc5df;
+  border: 2px solid #eef6fc;
+  border-radius: 999px;
+}
+
+body.admin-dashboard .panel,
+body.role-app.admin .panel,
+body.role-app.vet .panel {
+  border-radius: 16px;
+  box-shadow: 0 6px 18px rgba(0, 46, 74, .07);
+}
+
+body.admin-dashboard .panel-header,
+body.role-app.admin .panel-header,
+body.role-app.vet .panel-header {
+  min-height: 48px;
+  padding: 10px 16px;
+  background: linear-gradient(105deg, #015b8c, #002e4a);
+}
+
+body.admin-dashboard .panel-body,
+body.role-app.admin .panel-body,
+body.role-app.vet .panel-body {
+  padding: 18px;
+}
+
+body.admin-dashboard .stat-grid,
+body.role-app.admin .stat-grid,
+body.role-app.vet .stat-grid {
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+body.admin-dashboard .stat-card,
+body.role-app.admin .stat-card,
+body.role-app.vet .stat-card {
+  min-height: 82px;
+  padding: 13px 16px;
+  border-radius: 12px;
+  box-shadow: 0 3px 10px rgba(0, 46, 74, .05);
+}
+
+body.admin-dashboard .stat-label,
+body.role-app.admin .stat-label,
+body.role-app.vet .stat-label {
+  font-size: .68rem;
+}
+
+body.admin-dashboard .stat-value,
+body.role-app.admin .stat-value,
+body.role-app.vet .stat-value {
+  font-size: 1.48rem;
+}
+
+body.admin-dashboard .admin-welcome,
+body.role-app.admin .admin-welcome {
+  min-height: 210px;
+  margin-bottom: 14px;
+}
+
+body.admin-dashboard .dashboard-grid,
+body.role-app.admin .dashboard-grid {
+  width: 100%;
+  min-width: 0;
+  align-items: start;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+body.admin-dashboard .dashboard-column,
+body.role-app.admin .dashboard-column {
+  min-width: 0;
+}
+
+body.admin-dashboard .dashboard-grid .panel,
+body.role-app.admin .dashboard-grid .panel {
+  width: 100%;
+  min-width: 0;
+}
+
+body.role-app.admin .dashboard-grid .records-table {
+  min-width: 0;
+  width: 100%;
+}
+
+body.role-app.admin .dashboard-grid .data-table-card,
+body.role-app.admin .data-table-card {
+  min-height: 240px;
+  max-height: none;
+  margin-top: 0;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 46, 74, .04);
+}
+
+body.client-app .app-shell {
+  grid-template-columns: var(--admin-sidebar-width, 224px) minmax(0, 1fr);
+  transition: grid-template-columns .22s ease;
+}
+
+html.client-sidebar-collapsed body.client-app .app-shell,
+body.client-sidebar-collapsed .app-shell {
+  grid-template-columns: 76px minmax(0, 1fr);
+}
+
+body.client-app .sidebar {
+  width: var(--admin-sidebar-width, 224px);
+  min-width: 76px;
+  height: 100vh;
+  height: 100dvh;
+  padding: 18px 10px 14px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-width: none;
+  transition: width .22s ease, padding .22s ease, transform .22s ease;
+}
+
+body.client-app .sidebar::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
+html.client-sidebar-collapsed body.client-app .sidebar,
+body.client-sidebar-collapsed .sidebar {
+  width: 76px;
+  padding-inline: 8px;
+}
+
+body.client-app .brand-lockup {
+  margin: 0 0 20px;
+  transition: margin .22s ease;
+}
+
+body.client-app .brand-logo {
+  width: 82px;
+  height: 82px;
+  transition: width .22s ease, height .22s ease;
+}
+
+html.client-sidebar-collapsed body.client-app .brand-logo,
+body.client-sidebar-collapsed .brand-logo {
+  width: 52px;
+  height: 52px;
+}
+
+html.client-sidebar-collapsed body.client-app .brand-copy,
+html.client-sidebar-collapsed body.client-app .nav-item span,
+body.client-sidebar-collapsed .brand-copy,
+body.client-sidebar-collapsed .nav-item span {
+  display: none;
+}
+
+html.client-sidebar-collapsed body.client-app .nav-item,
+body.client-sidebar-collapsed .nav-item {
+  grid-template-columns: 1fr;
+  justify-items: center;
+  padding-inline: 8px;
+}
+
+body.client-app .side-nav {
+  gap: 6px;
+}
+
+body.client-app .nav-item {
+  min-height: 44px;
+  border-radius: 9px;
+  font-size: .86rem;
+}
+
+body.client-app .nav-item svg {
+  stroke-width: 1.8;
+}
+
+body.client-app .nav-item:first-child svg path {
+  fill: currentColor;
+  stroke: none;
+}
+
+body.client-app .nav-item.active {
+  background: #0284c7;
+  box-shadow: inset 3px 0 0 rgba(255, 255, 255, .7);
+}
+
+body.client-app .topbar-leading {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+body.client-app .topbar-title {
+  min-width: 0;
+  flex: 1;
+}
+
+body.client-app .topbar {
+  min-height: 68px;
+  padding: 10px 22px;
+}
+
+body.client-app .topbar-title h1 {
+  overflow: hidden;
+  font-size: 1.28rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body.client-app .topbar-title p {
+  margin-top: 1px;
+  font-size: .78rem;
+}
+
+body.client-app .page-content {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 18px 22px 26px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: #9fc5df #eef6fc;
+}
+
+body.client-app .page-content::-webkit-scrollbar {
+  width: 8px;
+}
+
+body.client-app .page-content::-webkit-scrollbar-track {
+  background: #eef6fc;
+}
+
+body.client-app .page-content::-webkit-scrollbar-thumb {
+  background: #9fc5df;
+  border: 2px solid #eef6fc;
+  border-radius: 999px;
+}
+
+body.client-app .sidebar-resizer {
+  display: block;
+}
+
+body.client-resizing,
+body.client-resizing * {
+  cursor: ew-resize !important;
+  user-select: none !important;
+}
+
+body.client-resizing .app-shell,
+body.client-resizing .sidebar {
+  transition: none;
+}
+
+body.role-app.admin .data-table-card .records-table thead th,
+body.role-app.admin .data-table-card .ap-table thead th,
+body.role-app.admin .data-table-card .pq-table thead th {
+  padding: 11px 16px;
+  font-size: .72rem !important;
+}
+
+body.role-app.admin .data-table-card .records-table tbody td,
+body.role-app.admin .data-table-card .ap-table tbody td,
+body.role-app.admin .data-table-card .pq-table tbody td {
+  padding: 12px 16px;
+  font-size: .9rem !important;
+  line-height: 1.35;
+}
+
+body.role-app.admin .data-table-card .records-table,
+body.role-app.admin .data-table-card .ap-table {
+  min-width: 680px;
+}
+
+body.admin-dashboard .toolbar,
+body.role-app.admin .toolbar {
+  margin-bottom: 12px;
+  padding: 12px;
+  background: #f7fbfe;
+  border: 1px solid #e1edf6;
+  border-radius: 12px;
+}
+
+body.admin-dashboard .toolbar input,
+body.admin-dashboard .toolbar select,
+body.role-app.admin .toolbar input,
+body.role-app.admin .toolbar select {
+  min-height: 42px;
+  border-radius: 9px;
+}
+
+.admin-search-wrap {
+  position: relative;
+  min-width: 220px;
+  flex: 1 1 300px;
+}
+
+.admin-search-wrap input[type="search"] {
+  width: 100%;
+  padding-right: 38px !important;
+}
+
+.admin-search-clear {
+  position: absolute;
+  right: 8px;
+  bottom: 7px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  display: none;
+  place-items: center;
+  color: #42637e;
+  background: #eef6fc;
+  border: 0;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.admin-search-wrap.has-value .admin-search-clear {
+  display: grid;
+}
+
+.admin-search-wrap.is-searching input {
+  border-color: #0284c7;
+  box-shadow: 0 0 0 3px rgba(2, 132, 199, .12);
+}
+
+@media (max-width: 760px) {
+  body.admin-sidebar-open .topbar,
+  body.vet-sidebar-open .topbar,
+  body.sidebar-open .topbar,
+  body.client-sidebar-open .topbar {
+    position: relative;
+    z-index: 35;
+  }
+
+  body.admin-dashboard .app-shell,
+  body.role-app.admin .app-shell,
+  body.role-app.vet .app-shell,
+  html.admin-sidebar-collapsed body.admin-dashboard .app-shell,
+  html.admin-sidebar-collapsed body.role-app.admin .app-shell,
+  html.vet-sidebar-collapsed body.role-app.vet .app-shell,
+  body.admin-sidebar-collapsed .app-shell,
+  body.sidebar-collapsed .app-shell,
+  body.vet-sidebar-collapsed .app-shell {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  body.admin-dashboard .sidebar,
+  body.role-app.admin .sidebar,
+  body.role-app.vet .sidebar,
+  html.admin-sidebar-collapsed body.admin-dashboard .sidebar,
+  html.admin-sidebar-collapsed body.role-app.admin .sidebar,
+  html.vet-sidebar-collapsed body.role-app.vet .sidebar,
+  body.admin-sidebar-collapsed .sidebar,
+  body.sidebar-collapsed .sidebar,
+  body.vet-sidebar-collapsed .sidebar {
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 40;
+    width: 224px !important;
+    max-width: calc(100vw - 48px);
+    padding: 18px 10px 14px;
+    transform: translateX(-105%);
+  }
+
+  body.admin-sidebar-open .sidebar,
+  body.vet-sidebar-open .sidebar,
+  body.sidebar-open .sidebar {
+    transform: translateX(0);
+  }
+
+  body.admin-sidebar-open::after,
+  body.vet-sidebar-open::after,
+  body.sidebar-open::after {
+    position: fixed;
+    inset: 0;
+    z-index: 30;
+    content: "";
+    background: rgba(0, 28, 46, .38);
+  }
+
+  body.admin-dashboard .sidebar-resizer,
+  body.role-app.admin .sidebar-resizer,
+  body.role-app.vet .sidebar-resizer {
+    display: none;
+  }
+
+  body.admin-dashboard .brand-lockup,
+  body.role-app.admin .brand-lockup,
+  body.role-app.vet .brand-lockup {
+    margin-bottom: 20px;
+  }
+
+  body.admin-dashboard .brand-logo,
+  body.role-app.admin .brand-logo,
+  body.role-app.vet .brand-logo,
+  html.admin-sidebar-collapsed body.admin-dashboard .brand-logo,
+  html.admin-sidebar-collapsed body.role-app.admin .brand-logo,
+  html.vet-sidebar-collapsed body.role-app.vet .brand-logo {
+    width: 72px;
+    height: 72px;
+  }
+
+  body.admin-dashboard .brand-copy,
+  body.role-app.admin .brand-copy,
+  body.role-app.vet .brand-copy,
+  body.admin-dashboard .nav-item span,
+  body.role-app.admin .nav-item span,
+  body.role-app.vet .nav-item span,
+  html.admin-sidebar-collapsed body.admin-dashboard .brand-copy,
+  html.admin-sidebar-collapsed body.role-app.admin .brand-copy,
+  html.vet-sidebar-collapsed body.role-app.vet .brand-copy,
+  html.admin-sidebar-collapsed body.admin-dashboard .nav-item span,
+  html.admin-sidebar-collapsed body.role-app.admin .nav-item span,
+  html.vet-sidebar-collapsed body.role-app.vet .nav-item span {
+    display: inline !important;
+  }
+
+  body.admin-dashboard .nav-item,
+  body.role-app.admin .nav-item,
+  body.role-app.vet .nav-item,
+  html.admin-sidebar-collapsed body.admin-dashboard .nav-item,
+  html.admin-sidebar-collapsed body.role-app.admin .nav-item,
+  html.vet-sidebar-collapsed body.role-app.vet .nav-item {
+    grid-template-columns: 23px minmax(0, 1fr);
+    justify-items: start;
+    padding-inline: 12px;
+  }
+
+  html.admin-sidebar-collapsed body.admin-dashboard .sidebar,
+  html.admin-sidebar-collapsed body.role-app.admin .sidebar,
+  html.vet-sidebar-collapsed body.role-app.vet .sidebar {
+    width: 224px !important;
+  }
+
+  body.admin-dashboard .topbar,
+  body.role-app.admin .topbar,
+  body.role-app.vet .topbar {
+    min-height: 62px;
+    padding: 8px 12px;
+  }
+
+  body.admin-dashboard .topbar-title p,
+  body.role-app.admin .topbar-title p,
+  body.role-app.vet .topbar-title p {
+    display: none;
+  }
+
+  body.admin-dashboard .page-content,
+  body.role-app.admin .page-content,
+  body.role-app.vet .page-content {
+    padding: 12px;
+  }
+
+  body.role-app.vet .data-table-card .records-table .vet-pet-cell {
+    align-items: center;
+    justify-content: flex-start;
+  }
+
+  body.admin-dashboard .panel-body,
+  body.role-app.admin .panel-body,
+  body.role-app.vet .panel-body {
+    padding: 12px;
+  }
+
+  body.admin-dashboard .stat-grid,
+  body.role-app.admin .stat-grid,
+  body.role-app.vet .stat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  body.admin-dashboard .admin-welcome,
+  body.role-app.admin .admin-welcome {
+    min-height: 180px;
+  }
+
+  body.admin-dashboard .toolbar,
+  body.role-app.admin .toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  body.admin-dashboard .toolbar label,
+  body.role-app.admin .toolbar label,
+  .admin-search-wrap {
+    width: 100%;
+    min-width: 0;
+  }
+
+  body.admin-dashboard .toolbar .button,
+  body.role-app.admin .toolbar .button {
+    width: 100%;
+  }
+
+  body.role-app.admin .data-table-card {
+    min-height: 360px;
+  }
+
+  body.client-app .app-shell,
+  html.client-sidebar-collapsed body.client-app .app-shell,
+  body.client-sidebar-collapsed .app-shell {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  body.client-app .sidebar {
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 40;
+    width: 224px !important;
+    max-width: calc(100vw - 48px);
+    padding: 18px 10px 14px;
+    transform: translateX(-105%);
+  }
+
+  body.client-sidebar-open .sidebar {
+    transform: translateX(0);
+  }
+
+  body.client-sidebar-open::after {
+    position: fixed;
+    inset: 0;
+    z-index: 30;
+    content: "";
+    background: rgba(0, 28, 46, .38);
+  }
+
+  body.client-app .sidebar-resizer {
+    display: none;
+  }
+
+  body.client-app .brand-logo,
+  html.client-sidebar-collapsed body.client-app .brand-logo {
+    width: 72px;
+    height: 72px;
+  }
+
+  body.client-app .brand-copy,
+  body.client-app .nav-item span,
+  html.client-sidebar-collapsed body.client-app .brand-copy,
+  html.client-sidebar-collapsed body.client-app .nav-item span {
+    display: inline;
+  }
+
+  body.client-app .nav-item,
+  html.client-sidebar-collapsed body.client-app .nav-item {
+    grid-template-columns: 23px minmax(0, 1fr);
+    justify-items: start;
+    padding-inline: 12px;
+  }
+
+  body.client-app .topbar {
+    min-height: 62px;
+    padding: 8px 12px;
+  }
+
+  body.client-app .topbar-title p {
+    display: none;
+  }
+
+  body.client-app .page-content {
+    padding: 12px;
+  }
+
+  body.client-app .panel-body {
+    padding: 12px;
+  }
+}
+
+@media (max-width: 1050px) {
+  body.role-app.vet .stat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1050px) {
+  body.admin-dashboard .dashboard-grid,
+  body.role-app.admin .dashboard-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  body.admin-dashboard #todays-appointments,
+  body.admin-dashboard #recent-transactions,
+  body.admin-dashboard #inventory-alerts,
+  body.role-app.admin #todays-appointments,
+  body.role-app.admin #recent-transactions,
+  body.role-app.admin #inventory-alerts {
+    grid-column: 1;
+    grid-row: auto;
+    height: auto;
+  }
+}
+
+@media (max-width: 480px) {
+  body.admin-dashboard .stat-grid,
+  body.role-app.admin .stat-grid,
+  body.role-app.vet .stat-grid {
+    grid-template-columns: 1fr;
+  }
+
+  body.admin-dashboard .topbar-title h1,
+  body.role-app.admin .topbar-title h1,
+  body.role-app.vet .topbar-title h1 {
+    font-size: 1.02rem;
+  }
+
+  body.client-app .topbar-title h1 {
+    font-size: 1.02rem;
+  }
+
+  body.admin-dashboard .profile-copy,
+  body.admin-dashboard .profile-divider,
+  body.role-app.admin .profile-copy,
+  body.role-app.admin .profile-divider,
+  body.role-app.vet .profile-copy,
+  body.role-app.vet .profile-divider {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body.admin-dashboard .app-shell,
+  body.role-app.admin .app-shell,
+  body.role-app.vet .app-shell,
+  body.admin-dashboard .sidebar,
+  body.role-app.admin .sidebar,
+  body.role-app.vet .sidebar,
+  body.client-app .app-shell,
+  body.client-app .sidebar,
+  .admin-hamburger {
+    transition: none;
+  }
+}
