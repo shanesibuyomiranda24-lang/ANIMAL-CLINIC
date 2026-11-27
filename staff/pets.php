@@ -18,10 +18,6 @@ $accountStatement->execute([(int) ($_SESSION['user_id'] ?? 0)]);
 $account = $accountStatement->fetch() ?: [];
 $isGroomerAccount = ($account['staff_role'] ?? '') === 'Groomer';
 $groomerId = (int) ($account['groomer_id'] ?? 0);
-if ($isGroomerAccount && basename(dirname($_SERVER['SCRIPT_NAME'] ?? '')) !== 'groomer') {
-    header('Location: ../groomer/pets.php');
-    exit;
-}
 $requestedPetId = filter_var(
     $_GET['pet'] ?? '',
     FILTER_VALIDATE_INT,
@@ -71,7 +67,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
             }
 
             if ((int) $petId > 0) {
-                $petStatement = $pdo->prepare('SELECT pet_id FROM Pets WHERE pet_id = ? AND archived_at IS NULL FOR UPDATE');
+                $petStatement = $pdo->prepare('SELECT pet_id FROM Pets WHERE pet_id = ? FOR UPDATE');
                 $petStatement->execute([(int) $petId]);
                 if (!$petStatement->fetchColumn()) {
                     throw new DomainException('That pet record no longer exists.');
@@ -158,7 +154,6 @@ if ($isGroomerAccount) {
              JOIN Services s ON s.service_id = aps.service_id
              WHERE aps.groomer_id = ?
                AND s.service_category = 'Grooming & Hygiene'
-               AND a.archived_at IS NULL AND p.archived_at IS NULL
                AND a.pickup_ready_at IS NOT NULL
                AND a.status NOT IN ('Cancelled', 'Rejected')
              GROUP BY p.pet_id, p.owner_id, p.pet_name, p.species, p.breed, p.birth_date, p.gender,
@@ -173,12 +168,10 @@ if ($isGroomerAccount) {
                     a.pickup_ready_at, a.picked_up_at,
                     GROUP_CONCAT(DISTINCT s.service_name ORDER BY s.service_name SEPARATOR ', ') AS service_names
              FROM Appointments a
-             JOIN Pets p ON p.pet_id = a.pet_id AND p.archived_at IS NULL
              JOIN AppointmentServices aps ON aps.appointment_id = a.appointment_id
              JOIN Services s ON s.service_id = aps.service_id
              WHERE aps.groomer_id = ?
                AND s.service_category = 'Grooming & Hygiene'
-               AND a.archived_at IS NULL
                AND a.pickup_ready_at IS NOT NULL
                AND a.status NOT IN ('Cancelled', 'Rejected')
              GROUP BY a.appointment_id, a.pet_id, a.appointment_date, a.status,
@@ -198,7 +191,6 @@ if ($isGroomerAccount) {
                 p.photo_updated_at, o.full_name AS owner_name
          FROM Pets p
          JOIN PetOwners o ON o.owner_id = p.owner_id
-         WHERE p.archived_at IS NULL
          ORDER BY p.pet_name'
     );
     $rows = $rowsStatement->fetchAll();

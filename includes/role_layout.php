@@ -122,7 +122,7 @@ function role_render(string $role, array $active, string $title, string $subtitl
             ['appointments', 'Appointments', 'appointments.php'],
             ['schedules', 'Vet Schedules', 'schedules.php'],
             ['queue', 'Patient Queue', 'queue.php'],
-            ['grooming', 'Grooming', '../groomer/appointments.php'],
+            ['grooming', 'Grooming', 'groomer.php'],
             ['owners', 'Clients & Pets', 'owners.php'],
             ['services', 'Services', 'services.php'],
             ['billing', 'Billing', 'billing.php'],
@@ -175,16 +175,14 @@ function role_render(string $role, array $active, string $title, string $subtitl
     }
     if ($role === 'staff' && $staffPosition === 'Groomer') {
         $menus['staff'] = [
-            ['dashboard', 'Dashboard', '../groomer/groomer_dashboard.php'],
-            ['appointments', 'Appointments', '../groomer/appointments.php'],
-            ['schedules', 'My Schedule', '../groomer/schedules.php'],
-            ['pets', 'Pet Records', '../groomer/pets.php'],
-            ['settings', 'Settings', '../groomer/settings.php'],
+            ['dashboard', 'Dashboard', 'staff_dashboard.php'],
+            ['appointments', 'Appointments', 'groomer.php'],
+            ['schedules', 'My Schedule', 'groomer_schedule.php'],
+            ['pets', 'Pet Records', 'pets.php'],
+            ['settings', 'Settings', 'settings.php'],
         ];
     }
-    $settingsHref = $role === 'staff' && $staffPosition === 'Groomer'
-        ? '../groomer/settings.php'
-        : 'settings.php';
+    $settingsHref = 'settings.php';
     $initial = mb_strtoupper(mb_substr($fullName, 0, 1));
     $context = ['pdo' => $pdo, 'userId' => $userId, 'role' => $role];
 
@@ -348,11 +346,15 @@ function role_render(string $role, array $active, string $title, string $subtitl
                     if ($role === 'staff' && $staffPosition === 'Groomer') {
                         $notificationPage = basename((string) parse_url($link, PHP_URL_PATH));
                         if (in_array($notificationPage, ['appointments.php', 'groomer.php'], true)) {
-                            $link = 'groomer/appointments.php';
+                            $link = 'groomer.php';
                         } elseif (in_array($notificationPage, ['groomer_schedule.php', 'schedules.php'], true)) {
-                            $link = 'groomer/schedules.php';
-                        } elseif ($notificationPage === 'staff_dashboard.php') {
-                            $link = 'groomer/groomer_dashboard.php';
+                            $link = 'groomer_schedule.php';
+                        } elseif (in_array($notificationPage, ['staff_dashboard.php', 'groomer_dashboard.php'], true)) {
+                            $link = 'staff_dashboard.php';
+                        } elseif ($notificationPage === 'pets.php') {
+                            $link = 'pets.php';
+                        } elseif ($notificationPage === 'settings.php') {
+                            $link = 'settings.php';
                         }
                     }
                     if ($link !== '') {

@@ -125,7 +125,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                         'schedule',
                         'Grooming schedule request ' . strtolower($newStatus),
                         'Your working hours request was ' . strtolower($newStatus) . '.' . ($reviewNote !== '' ? ' Admin note: ' . $reviewNote : ''),
-                        'groomer/schedules.php',
+                        'groomer_schedule.php',
                         'groomer_schedule_reviewed_' . (int) $requestId
                     );
                     role_log($pdo, (int) $_SESSION['user_id'], 'groomer.schedule.' . strtolower($newStatus), 'groomer_schedule_request', (int) $requestId, $reviewNote !== '' ? $reviewNote : $profile['full_name']);
@@ -182,7 +182,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                         'Your leave request from ' . date('M j, Y', strtotime((string) $leave['start_date']))
                             . ' to ' . date('M j, Y', strtotime((string) $leave['end_date']))
                             . ' was ' . strtolower($newStatus) . '.' . ($reviewNote !== '' ? ' Admin note: ' . $reviewNote : ''),
-                        'groomer/schedules.php',
+                        'groomer_schedule.php',
                         'groomer_leave_reviewed_' . (int) $requestId
                     );
                     role_log($pdo, (int) $_SESSION['user_id'], 'groomer.leave.' . strtolower($newStatus), 'groomer_leave', (int) $requestId, $reviewNote !== '' ? $reviewNote : $leave['full_name']);

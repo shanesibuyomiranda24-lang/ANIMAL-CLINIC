@@ -99,7 +99,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
             $petStatement = $pdo->prepare(
                 'SELECT p.pet_id, p.owner_id, p.pet_name, o.full_name AS owner_name
                  FROM Pets p JOIN PetOwners o ON o.owner_id = p.owner_id
-                 WHERE p.pet_id = ? AND p.archived_at IS NULL FOR UPDATE'
+                 WHERE p.pet_id = ? FOR UPDATE'
             );
             $petStatement->execute([(int) $petId]);
             $pet = $petStatement->fetch();
@@ -166,7 +166,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
             $dailyCount = $pdo->prepare(
                 "SELECT COUNT(*)
                  FROM Appointments
-                 WHERE vet_id = ? AND archived_at IS NULL AND DATE(appointment_date) = ?
+                 WHERE vet_id = ? AND DATE(appointment_date) = ?
                    AND status IN ($capacityPlaceholders)
                  FOR UPDATE"
             );
@@ -190,7 +190,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
             $conflicts = $pdo->prepare(
                 "SELECT appointment_date, duration_minutes
                  FROM Appointments
-                 WHERE vet_id = ? AND archived_at IS NULL AND appointment_date < ?
+                 WHERE vet_id = ? AND appointment_date < ?
                    AND DATE_ADD(appointment_date, INTERVAL duration_minutes MINUTE) > ?
                    AND status IN ($statusPlaceholders)
                  ORDER BY appointment_date
@@ -295,7 +295,6 @@ $pets = $pdo->query(
     'SELECT p.pet_id, p.owner_id, p.pet_name, p.species, p.breed, o.full_name AS owner_name,
             IF(p.photo_data IS NULL, NULL, COALESCE(UNIX_TIMESTAMP(p.photo_updated_at), 1)) AS photo_ver
      FROM Pets p JOIN PetOwners o ON o.owner_id = p.owner_id
-     WHERE p.archived_at IS NULL
      ORDER BY o.full_name, p.pet_name'
 )->fetchAll();
 $services = $pdo->query(

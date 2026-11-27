@@ -3,26 +3,10 @@ require_once __DIR__ . '/../includes/role_layout.php';
 require_once __DIR__ . '/../includes/pet_photos.php';
 require_role(['staff']);
 
-$scriptDirectory = basename(dirname($_SERVER['SCRIPT_NAME'] ?? ''));
-if ($scriptDirectory !== 'groomer') {
-    $positionStatement = db()->prepare(
-        "SELECT s.`role`
-         FROM Users u
-         JOIN Staff s ON s.staff_id = u.staff_id
-         WHERE u.user_id = ? AND u.`role` = 'staff' AND u.status = 'active'"
-    );
-    $positionStatement->execute([(int) $_SESSION['user_id']]);
-    if ($positionStatement->fetchColumn() === 'Groomer') {
-        header('Location: ../groomer/groomer_dashboard.php');
-        exit;
-    }
-}
-
-$groomerRoutePrefix = $scriptDirectory === 'groomer' ? '' : '../groomer/';
 $appointmentFlash = (string) ($_SESSION['staff_appointment_flash'] ?? '');
 unset($_SESSION['staff_appointment_flash']);
 
-role_render('staff', ['dashboard'], 'Staff Dashboard', 'Daily clinic activity', function (array $context) use ($appointmentFlash, $groomerRoutePrefix): void {
+role_render('staff', ['dashboard'], 'Staff Dashboard', 'Daily clinic activity', function (array $context) use ($appointmentFlash): void {
     $pdo = $context['pdo'];
     $today = date('Y-m-d');
     $todayStart = $today . ' 00:00:00';
@@ -82,7 +66,6 @@ role_render('staff', ['dashboard'], 'Staff Dashboard', 'Daily clinic activity', 
          JOIN PetOwners o ON o.owner_id = p.owner_id
          LEFT JOIN Veterinarians v ON v.vet_id = a.vet_id
          WHERE a.appointment_date >= ? AND a.appointment_date < ?
-           AND a.archived_at IS NULL AND p.archived_at IS NULL
            $todayScope
            AND a.status NOT IN ('Cancelled','Rejected')
            $todayStatusScope
@@ -100,7 +83,7 @@ role_render('staff', ['dashboard'], 'Staff Dashboard', 'Daily clinic activity', 
                 COUNT(CASE WHEN a.status = 'In Consultation' THEN 1 END) AS active,
                 COUNT(CASE WHEN a.pickup_ready_at IS NOT NULL THEN 1 END) AS complete
              FROM Appointments a
-             WHERE a.archived_at IS NULL AND EXISTS (
+             WHERE EXISTS (
                 SELECT 1
                 FROM AppointmentServices grooming_aps
                 JOIN Services grooming_service ON grooming_service.service_id = grooming_aps.service_id
@@ -116,7 +99,7 @@ role_render('staff', ['dashboard'], 'Staff Dashboard', 'Daily clinic activity', 
     $pendingCount = 0;
     $pendingAppointments = [];
     if (!$isGroomer) {
-        $pendingCountStatement = $pdo->query("SELECT COUNT(*) FROM Appointments WHERE archived_at IS NULL AND status = 'Pending'");
+        $pendingCountStatement = $pdo->query("SELECT COUNT(*) FROM Appointments WHERE status = 'Pending'");
         $pendingCount = (int) $pendingCountStatement->fetchColumn();
 
         $pendingAppointmentsStatement = $pdo->query(
@@ -129,7 +112,7 @@ role_render('staff', ['dashboard'], 'Staff Dashboard', 'Daily clinic activity', 
              LEFT JOIN Veterinarians v ON v.vet_id = a.vet_id
              LEFT JOIN AppointmentServices aps ON aps.appointment_id = a.appointment_id
              LEFT JOIN Services s ON s.service_id = aps.service_id
-             WHERE a.status = 'Pending' AND a.archived_at IS NULL AND p.archived_at IS NULL
+             WHERE a.status = 'Pending'
              GROUP BY a.appointment_id, a.appointment_date, p.pet_name, o.full_name, v.full_name
              ORDER BY a.appointment_date
              LIMIT 4"
@@ -141,11 +124,10 @@ role_render('staff', ['dashboard'], 'Staff Dashboard', 'Daily clinic activity', 
         "SELECT v.vet_id, v.full_name, v.is_available, v.max_appointments_per_day,
                 s.start_time, s.end_time,
                 (SELECT COUNT(*) FROM Appointments a
-                 WHERE a.vet_id = v.vet_id AND a.archived_at IS NULL AND a.appointment_date >= ? AND a.appointment_date < ?
-                   AND a.archived_at IS NULL
+                 WHERE a.vet_id = v.vet_id AND a.appointment_date >= ? AND a.appointment_date < ?
                    AND a.status IN ('Scheduled','Waiting','Check-in','In Consultation','Complete')) AS appointments_today,
                 (SELECT COUNT(*) FROM Appointments a
-                 WHERE a.vet_id = v.vet_id AND a.archived_at IS NULL
+                 WHERE a.vet_id = v.vet_id
                    AND a.status IN ('Pending','Scheduled','Waiting','Check-in','In Consultation')
                    AND (a.status = 'In Consultation'
                         OR (a.appointment_date <= ?
@@ -184,8 +166,8 @@ role_render('staff', ['dashboard'], 'Staff Dashboard', 'Daily clinic activity', 
         <p><?= $isGroomer ? 'Review your grooming patients, sessions and schedule for the day.' : 'Coordinate appointments, keep the patient queue moving, and make every visit easier for pets and their families.' ?></p>
         <?php if ($isGroomer): ?>
         <div class="clinic-banner-actions">
-          <a class="button light" href="<?= e($groomerRoutePrefix) ?>appointments.php">Today's appointments</a>
-          <a class="button ghost" href="<?= e($groomerRoutePrefix) ?>schedules.php">My schedule</a>
+          <a class="button light" href="groomer.php">Today's appointments</a>
+          <a class="button ghost" href="groomer_schedule.php">My schedule</a>
         </div>
         <?php else: ?>
         <div class="clinic-banner-actions">
@@ -686,5 +668,4 @@ role_render('staff', ['dashboard'], 'Staff Dashboard', 'Daily clinic activity', 
     <?php endif; ?>
     <?php
 });
-
 
