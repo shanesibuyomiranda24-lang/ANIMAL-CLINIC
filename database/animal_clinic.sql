@@ -65,6 +65,7 @@ CREATE TABLE Users (
     full_name VARCHAR(100) NOT NULL DEFAULT '',
     email VARCHAR(254) NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
+    must_change_password TINYINT(1) NOT NULL DEFAULT 0,
     `role` VARCHAR(20) NOT NULL,
     status VARCHAR(10) NOT NULL DEFAULT 'active',
     owner_id INT UNSIGNED NULL,
@@ -72,17 +73,54 @@ CREATE TABLE Users (
     vet_id INT UNSIGNED NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    archived_at DATETIME NULL,
+    archived_by_user_id INT UNSIGNED NULL,
+    restored_at DATETIME NULL,
+    restored_by_user_id INT UNSIGNED NULL,
     PRIMARY KEY (user_id),
     UNIQUE KEY uq_user_email (email),
     UNIQUE KEY uq_user_owner (owner_id),
     UNIQUE KEY uq_user_staff (staff_id),
     UNIQUE KEY uq_user_vet (vet_id),
     KEY idx_user_role_status (`role`,status),
+    KEY idx_users_archived (archived_at,restored_at),
     CONSTRAINT chk_user_role CHECK (`role` IN ('admin','staff','vet','client')),
     CONSTRAINT chk_user_status CHECK (status IN ('active','inactive')),
     CONSTRAINT fk_user_owner FOREIGN KEY (owner_id) REFERENCES PetOwners(owner_id) ON DELETE SET NULL,
     CONSTRAINT fk_user_staff FOREIGN KEY (staff_id) REFERENCES Staff(staff_id) ON DELETE SET NULL,
-    CONSTRAINT fk_user_vet FOREIGN KEY (vet_id) REFERENCES Veterinarians(vet_id) ON DELETE SET NULL
+    CONSTRAINT fk_user_vet FOREIGN KEY (vet_id) REFERENCES Veterinarians(vet_id) ON DELETE SET NULL,
+    CONSTRAINT fk_users_archived_by FOREIGN KEY (archived_by_user_id) REFERENCES Users(user_id) ON DELETE SET NULL,
+    CONSTRAINT fk_users_restored_by FOREIGN KEY (restored_by_user_id) REFERENCES Users(user_id) ON DELETE SET NULL
+) ENGINE=InnoDB;
+
+CREATE TABLE PasswordRecoveryRequests (
+    request_id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    request_email VARCHAR(254) NOT NULL,
+    user_id INT UNSIGNED NULL,
+    status VARCHAR(10) NOT NULL DEFAULT 'Pending',
+    submitted_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    request_ip_address VARCHAR(45) NULL,
+    reviewed_by_user_id INT UNSIGNED NULL,
+    reviewed_at DATETIME NULL,
+    verification_method VARCHAR(32) NULL,
+    verification_result VARCHAR(20) NOT NULL DEFAULT 'Not verified',
+    verification_notes TEXT NULL,
+    verified_by_user_id INT UNSIGNED NULL,
+    verified_at DATETIME NULL,
+    rejection_reason VARCHAR(500) NULL,
+    completed_at DATETIME NULL,
+    PRIMARY KEY (request_id),
+    KEY idx_password_recovery_status_time (status,submitted_at),
+    KEY idx_password_recovery_email_status (request_email,status),
+    KEY idx_password_recovery_ip_time (request_ip_address,submitted_at),
+    KEY idx_password_recovery_verification (status,verification_result),
+    KEY idx_password_recovery_verifier (verified_by_user_id),
+    CONSTRAINT chk_password_recovery_status CHECK (status IN ('Pending','Approved','Rejected')),
+    CONSTRAINT chk_password_recovery_verification CHECK (verification_result IN ('Not verified','Verified')),
+    CONSTRAINT chk_password_recovery_verification_method CHECK (verification_method IS NULL OR verification_method IN ('in_person','registered_contact','other')),
+    CONSTRAINT fk_password_recovery_user FOREIGN KEY (user_id) REFERENCES Users(user_id) ON DELETE SET NULL,
+    CONSTRAINT fk_password_recovery_reviewer FOREIGN KEY (reviewed_by_user_id) REFERENCES Users(user_id) ON DELETE SET NULL,
+    CONSTRAINT fk_password_recovery_verifier FOREIGN KEY (verified_by_user_id) REFERENCES Users(user_id) ON DELETE SET NULL
 ) ENGINE=InnoDB;
 
 ALTER TABLE Groomers
@@ -102,9 +140,16 @@ CREATE TABLE Pets (
     photo_updated_at TIMESTAMP NULL DEFAULT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    archived_at DATETIME NULL,
+    archived_by_user_id INT UNSIGNED NULL,
+    restored_at DATETIME NULL,
+    restored_by_user_id INT UNSIGNED NULL,
     PRIMARY KEY (pet_id),
     KEY idx_pet_owner (owner_id,pet_name),
-    CONSTRAINT fk_pet_owner FOREIGN KEY (owner_id) REFERENCES PetOwners(owner_id) ON DELETE RESTRICT
+    KEY idx_pets_archived (archived_at,restored_at),
+    CONSTRAINT fk_pet_owner FOREIGN KEY (owner_id) REFERENCES PetOwners(owner_id) ON DELETE RESTRICT,
+    CONSTRAINT fk_pets_archived_by FOREIGN KEY (archived_by_user_id) REFERENCES Users(user_id) ON DELETE SET NULL,
+    CONSTRAINT fk_pets_restored_by FOREIGN KEY (restored_by_user_id) REFERENCES Users(user_id) ON DELETE SET NULL
 ) ENGINE=InnoDB;
 
 CREATE TABLE Services (
@@ -328,10 +373,15 @@ CREATE TABLE Appointments (
     is_reschedule_request TINYINT(1) NOT NULL DEFAULT 0,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    archived_at DATETIME NULL,
+    archived_by_user_id INT UNSIGNED NULL,
+    restored_at DATETIME NULL,
+    restored_by_user_id INT UNSIGNED NULL,
     PRIMARY KEY (appointment_id),
     KEY idx_appt_vet_date (vet_id,appointment_date),
     KEY idx_appt_pet_date (pet_id,appointment_date),
     KEY idx_appt_status (status,appointment_date),
+    KEY idx_appointments_archived (archived_at,restored_at),
     CONSTRAINT chk_appt_status CHECK (
         status IN ('Pending','Scheduled','Waiting','Check-in','In Consultation','Complete','Cancelled','Rejected')
     ),
@@ -345,7 +395,9 @@ CREATE TABLE Appointments (
     CONSTRAINT chk_walkin CHECK (walk_in IN (0,1)),
     CONSTRAINT fk_appt_pet FOREIGN KEY (pet_id) REFERENCES Pets(pet_id) ON DELETE RESTRICT,
     CONSTRAINT fk_appt_vet FOREIGN KEY (vet_id) REFERENCES Veterinarians(vet_id) ON DELETE SET NULL,
-    CONSTRAINT fk_appt_staff FOREIGN KEY (staff_id) REFERENCES Staff(staff_id) ON DELETE SET NULL
+    CONSTRAINT fk_appt_staff FOREIGN KEY (staff_id) REFERENCES Staff(staff_id) ON DELETE SET NULL,
+    CONSTRAINT fk_appointments_archived_by FOREIGN KEY (archived_by_user_id) REFERENCES Users(user_id) ON DELETE SET NULL,
+    CONSTRAINT fk_appointments_restored_by FOREIGN KEY (restored_by_user_id) REFERENCES Users(user_id) ON DELETE SET NULL
 ) ENGINE=InnoDB;
 
 CREATE TABLE AppointmentServices (
@@ -627,11 +679,11 @@ CREATE TABLE ActivityLog (
 ) ENGINE=InnoDB;
 
 -- Initial account and services
--- Password: admin123; bcrypt hash, not plaintext.
+-- Password: Admin@123; bcrypt hash, not plaintext.
 INSERT INTO Users(full_name,email,password_hash,`role`,status)
-VALUES ('Animal Clinic Admin','animalclinic@gmail.com','$2y$12$Ux/kCGQ/LymkE8Ip/sAPd.Quj4qjno7fsu9zNV9xuJOUnJ5wKKNh2','admin','active');
+VALUES ('Animal Clinic Admin','animalclinic@gmail.com','$2y$12$6lOa9WvsrNg1UnKG7bGal.MsIxndo1enKC1h5dYg92fLV4NM4jJke','admin','active');
 
--- Demo accounts for local testing only. All three accounts use password: admin123.
+-- Demo accounts for local testing only. All three accounts use password: Admin@123.
 -- Change these passwords before deploying the application.
 INSERT INTO Veterinarians(full_name,license_number,contact_number)
 VALUES ('Dr. Maria Santos','VET-SEED-001',NULL);
@@ -639,7 +691,7 @@ SET @seed_vet_id = LAST_INSERT_ID();
 
 INSERT INTO Users(full_name,email,password_hash,`role`,status,vet_id)
 VALUES ('Dr. Maria Santos','vet@animalclinic.com',
-        '$2y$12$Ux/kCGQ/LymkE8Ip/sAPd.Quj4qjno7fsu9zNV9xuJOUnJ5wKKNh2','vet','active',@seed_vet_id);
+        '$2y$12$6lOa9WvsrNg1UnKG7bGal.MsIxndo1enKC1h5dYg92fLV4NM4jJke','vet','active',@seed_vet_id);
 
 INSERT INTO Staff(full_name,`role`)
 VALUES ('Alex Reyes','Clinic Staff');
@@ -647,7 +699,7 @@ SET @seed_staff_id = LAST_INSERT_ID();
 
 INSERT INTO Users(full_name,email,password_hash,`role`,status,staff_id)
 VALUES ('Alex Reyes','staff@animalclinic.com',
-        '$2y$12$Ux/kCGQ/LymkE8Ip/sAPd.Quj4qjno7fsu9zNV9xuJOUnJ5wKKNh2','staff','active',@seed_staff_id);
+        '$2y$12$6lOa9WvsrNg1UnKG7bGal.MsIxndo1enKC1h5dYg92fLV4NM4jJke','staff','active',@seed_staff_id);
 
 INSERT INTO Services(service_name,service_category,base_price,duration_minutes,description,is_active) VALUES
 ('Consultation','Preventive & Routine Care',500.00,30,'General veterinary examination',1),

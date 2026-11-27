@@ -487,8 +487,7 @@ if (is_logged_in()) {
               <input type="password" name="password" placeholder="Password" aria-label="Password" required autocomplete="current-password">
             </label>
             <div class="forgot-row">
-              <a class="forgot-link" href="#forgot-password-help">Forgot Password</a>
-              <p class="forgot-help" id="forgot-password-help">Please contact the clinic to reset your password.</p>
+              <a class="forgot-link" href="forgot_password.php">Forgot Password?</a>
             </div>
             <button class="button login-button" type="submit">Log in</button>
           </form>
@@ -521,7 +520,7 @@ if (is_logged_in()) {
               <svg class="field-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                 <path d="M17 8h-1V6a4 4 0 0 0-8 0v2H7a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V10a2 2 0 0 0-2-2ZM10 6a2 2 0 1 1 4 0v2h-4V6Zm3 9.7V18h-2v-2.3a2 2 0 1 1 2 0Z"/>
               </svg>
-              <input type="password" id="signupPassword" name="password" placeholder="Password" aria-label="Password" required minlength="8" maxlength="72" autocomplete="new-password">
+              <input type="password" id="signupPassword" name="password" placeholder="Password" aria-label="Password" required minlength="7" maxlength="14" autocomplete="new-password">
               <div class="pw-warning" id="pwWarning" role="alert" hidden></div>
             </label>
 
@@ -529,7 +528,7 @@ if (is_logged_in()) {
               <svg class="field-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                 <path d="M17 8h-1V6a4 4 0 0 0-8 0v2H7a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V10a2 2 0 0 0-2-2ZM10 6a2 2 0 1 1 4 0v2h-4V6Zm3 9.7V18h-2v-2.3a2 2 0 1 1 2 0Z"/>
               </svg>
-              <input type="password" name="confirm" placeholder="Confirm password" aria-label="Confirm password" required minlength="8" maxlength="72" autocomplete="new-password">
+              <input type="password" name="confirm" placeholder="Confirm password" aria-label="Confirm password" required minlength="7" maxlength="14" autocomplete="new-password">
             </label>
             <button class="button signup-button" type="submit">Sign up</button>
           </form>
@@ -618,11 +617,12 @@ if (is_logged_in()) {
       const warn = document.getElementById('pwWarning');
 
       function problem(p) {
-        if (p.length < 8) return 'Weak password';
-        if (!/[a-z]/.test(p)) return 'Weak password: add at least one lowercase letter.';
-        if (!/[A-Z]/.test(p)) return 'Weak password: add at least one uppercase letter.';
-        if (!/[0-9]/.test(p)) return 'Weak password: add at least one number.';
-        if (!/[^A-Za-z0-9]/.test(p)) return 'Weak password: add at least one special character (e.g. ! @ # $ %).';
+        if (p.length < 7) return 'Password must be at least 7 characters.';
+        if (p.length > 14) return 'Password must not exceed 14 characters.';
+        if (!/[a-z]/.test(p)) return 'Password must include a lowercase letter.';
+        if (!/[A-Z]/.test(p)) return 'Password must include an uppercase letter.';
+        if (!/[0-9]/.test(p)) return 'Password must include a number.';
+        if (!/[^A-Za-z0-9]/.test(p)) return 'Password must include a special character.';
         return '';
       }
 

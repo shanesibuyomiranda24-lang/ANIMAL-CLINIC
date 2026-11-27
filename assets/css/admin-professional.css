@@ -957,7 +957,39 @@ body.role-app.admin .toolbar select {
   }
 }
 
+@view-transition {
+  navigation: auto;
+}
+
+::view-transition-old(root) {
+  animation: app-navigation-out 180ms ease-in both;
+}
+
+::view-transition-new(root) {
+  animation: app-navigation-in 180ms ease-out both;
+}
+
+@keyframes app-navigation-out {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes app-navigation-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none;
+  }
+
   body.admin-dashboard .app-shell,
   body.role-app.admin .app-shell,
   body.role-app.vet .app-shell,

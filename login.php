@@ -30,7 +30,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
         $error = 'Enter a valid email address and password.';
     } else {
         try {
-            $st = db()->prepare("SELECT user_id, full_name, email, password_hash, `role` FROM users WHERE email = ? AND status = 'active' LIMIT 1");
+            $st = db()->prepare("SELECT user_id, full_name, email, password_hash, `role`, must_change_password FROM users WHERE email = ? AND status = 'active' AND archived_at IS NULL LIMIT 1");
             $st->execute([$email]);
             $u = $st->fetch();
 
@@ -51,7 +51,10 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                 $_SESSION['full_name'] = $u['full_name'];
                 $_SESSION['email']    = $u['email'];
                 $_SESSION['role']     = $role;
-                header('Location: ' . home_for_role($role));
+                $_SESSION['must_change_password'] = (int) $u['must_change_password'] === 1;
+                header('Location: ' . ($_SESSION['must_change_password']
+                    ? 'change_password.php?session_context=' . rawurlencode($role)
+                    : home_for_role($role)));
                 exit;
             }
         } catch (PDOException $ex) {
@@ -302,17 +305,6 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
       text-decoration: none;
     }
 
-    .forgot-help {
-      display: none;
-      margin: 8px 0 0;
-      color: #557184;
-      font-size: .83rem;
-      line-height: 1.4;
-      text-align: right;
-    }
-
-    .forgot-help:target { display: block; }
-
     .button {
       min-height: 48px;
       padding: 12px 20px;
@@ -454,8 +446,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
           </button>
         </label>
         <div class="forgot-row">
-          <a class="forgot-link" href="#forgot-password-help">Forgot Password</a>
-          <p class="forgot-help" id="forgot-password-help">Please contact the clinic to reset your password.</p>
+          <a class="forgot-link" href="forgot_password.php">Forgot Password?</a>
         </div>
         <button class="button" type="submit">Log in</button>
       </form>

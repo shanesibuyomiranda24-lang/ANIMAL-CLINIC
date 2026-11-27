@@ -45,9 +45,12 @@ if ($pdo) {
 
     $guard('statistics', function () use (&$stats, $scalar) {
         $stats['owners'] = (int) $scalar('SELECT COUNT(*) FROM PetOwners');
-        $stats['pets'] = (int) $scalar('SELECT COUNT(*) FROM Pets');
+        $stats['pets'] = (int) $scalar('SELECT COUNT(*) FROM Pets WHERE archived_at IS NULL');
         $stats['today_appointments'] = (int) $scalar(
-            'SELECT COUNT(*) FROM Appointments WHERE appointment_date >= CURRENT_DATE AND appointment_date < DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY)'
+            'SELECT COUNT(*) FROM Appointments
+             WHERE archived_at IS NULL
+               AND pet_id IN (SELECT pet_id FROM Pets WHERE archived_at IS NULL)
+               AND appointment_date >= CURRENT_DATE AND appointment_date < DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY)'
         );
         $stats['veterinarians'] = (int) $scalar('SELECT COUNT(*) FROM Veterinarians');
         $stats['staff'] = (int) $scalar('SELECT COUNT(*) FROM Staff');
@@ -65,6 +68,7 @@ if ($pdo) {
              JOIN PetOwners o ON o.owner_id = p.owner_id
              LEFT JOIN Veterinarians v ON v.vet_id = a.vet_id
              WHERE a.appointment_date >= CURRENT_DATE
+               AND a.archived_at IS NULL AND p.archived_at IS NULL
                AND a.appointment_date < DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY)
              ORDER BY a.appointment_date
              LIMIT 10'
@@ -90,7 +94,7 @@ if ($pdo) {
 
     $guard('inventory alerts', function () use ($pdo, &$inventoryAlerts) {
         $statement = $pdo->prepare(
-            'SELECT item_name, quantity, expiration_date
+            'SELECT inventory_id, item_name, quantity, expiration_date
              FROM Inventory
              ORDER BY CASE
                         WHEN expiration_date IS NOT NULL AND expiration_date < CURRENT_DATE THEN 0
@@ -191,18 +195,28 @@ $notificationBadge = $notifications['count'] > 99 ? '99+' : (string) $notificati
 
     /* ---------- Dashboard panels ---------- */
     .dashboard-grid{min-width:0;margin-bottom:14px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:stretch;gap:14px}.dashboard-column{min-width:0;display:contents}
+    body.admin-dashboard .page-content .dashboard-grid{align-items:stretch}
     #todays-appointments,#recent-transactions,#inventory-alerts{display:flex;flex-direction:column;border-color:#d7e8f5;border-radius:20px;box-shadow:0 10px 28px rgba(0,46,74,.08)}
     #todays-appointments,#recent-transactions{grid-row:1;height:auto}
     #inventory-alerts{grid-column:1/-1;grid-row:2;height:auto}
     #todays-appointments .panel-header,#recent-transactions .panel-header,#inventory-alerts .panel-header{flex:0 0 auto;min-height:64px;padding:18px 24px;background:linear-gradient(100deg,#015b8c,#00395c 55%,#002339)}
     #todays-appointments .table-wrap,#recent-transactions .table-wrap,#inventory-alerts .table-wrap{flex:none}
+    #todays-appointments .panel-body,#recent-transactions .panel-body{min-height:0;flex:1;display:flex;flex-direction:column}
+    #todays-appointments .table-wrap,#recent-transactions .table-wrap{min-height:0;flex:1;display:flex;overflow:hidden}
+    #todays-appointments .records-table,#recent-transactions .records-table{height:100%}
 
     /* ---------- Tables: aligned columns, grid lines, colors ---------- */
-    .table-wrap{width:100%;min-width:0;overflow-x:auto;overflow-y:hidden;background:#fff}
-    .records-table{width:100%;min-width:640px;table-layout:fixed;border-collapse:separate;border-spacing:0;text-align:left}
+    .table-wrap{width:100%;min-width:0;overflow-x:hidden;overflow-y:hidden;background:#fff}
+    #todays-appointments .table-wrap.has-records,#recent-transactions .table-wrap.has-records,#inventory-alerts .table-wrap.has-records{height:320px;max-height:320px;min-height:0;flex:0 0 320px;display:block;overflow-x:hidden;overflow-y:auto}
+    #todays-appointments .table-wrap.has-records .records-table,#recent-transactions .table-wrap.has-records .records-table{height:auto}
+    .records-table{width:100%;min-width:0;table-layout:fixed;border-collapse:separate;border-spacing:0;text-align:left}
     .records-table th,.records-table td{padding:12px 14px;overflow:hidden;border-right:1px solid var(--grid-line);border-bottom:1px solid var(--grid-line);text-overflow:ellipsis;white-space:nowrap;vertical-align:middle}
+    .records-table.dashboard-records th,.records-table.dashboard-records td{padding:8px 9px;overflow-wrap:anywhere;white-space:normal}
+    .records-table.dashboard-records tbody td{font-size:.82rem;line-height:1.35}
+    .records-table.dashboard-records .status{max-width:100%;padding:4px 8px;justify-content:center;white-space:normal}
     .records-table th:last-child,.records-table td:last-child{border-right:0}
     .records-table thead th{position:sticky;top:0;z-index:1;color:var(--blue-900);background:linear-gradient(180deg,#e4f1fb,#cfe5f5);border-bottom:2px solid var(--grid-strong);border-right-color:#b5d2e7;font-size:.72rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase}
+    #todays-appointments .records-table thead th,#recent-transactions .records-table thead th{height:70px;white-space:nowrap}
     .records-table tbody td{color:#244661;font-size:.9rem;line-height:1.4}
     .records-table tbody tr:nth-child(odd) td{background:#fff}
     .records-table tbody tr:nth-child(even) td{background:#f1f7fc}
@@ -212,11 +226,31 @@ $notificationBadge = $notifications['count'] > 99 ? '99+' : (string) $notificati
     .records-table .col-center{text-align:center}
     .records-table .col-right{text-align:right}
     .records-table .col-money{font-weight:700;color:#0b6b57;font-variant-numeric:tabular-nums}
+    .records-table.dashboard-records .record-row{cursor:pointer;transition:background-color .15s ease}
+    .records-table.dashboard-records .record-row:focus-visible{outline:3px solid var(--blue-500);outline-offset:-3px}
+    .records-table.dashboard-records .record-row:hover td{background:#e1effa}
     .records-table tbody tr.empty-row td{padding:0;background:#fff;border-right:0;border-bottom:0}
     .records-table tbody tr.empty-row:hover td{background:#fff}
     .empty-state-box{min-height:170px;padding:16px;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:6px;color:var(--muted);text-align:center;white-space:normal}
     .empty-state-box span{font-size:.92rem;font-weight:700;color:#4d6f8a}.empty-state-box small{font-size:.76rem;color:#7b97ad}
     .empty-icon{color:#71b9e2;font-size:1.8rem;line-height:1}
+
+    .record-dialog{width:min(760px,calc(100vw - 28px));max-width:none;max-height:min(82dvh,780px);padding:0;overflow:hidden;color:var(--ink);background:#fff;border:1px solid #b9d6ea;border-radius:16px;box-shadow:0 24px 70px rgba(0,20,40,.3)}
+    .record-dialog::backdrop{background:rgba(0,30,55,.58);backdrop-filter:blur(2px)}
+    .record-dialog-header{position:sticky;top:0;z-index:1;padding:16px 20px;display:flex;align-items:center;justify-content:space-between;gap:12px;color:#fff;background:linear-gradient(100deg,#015b8c,#002e4a)}
+    .record-dialog-header h2{margin:0;font-size:1.12rem;line-height:1.3}
+    .record-dialog-close{width:36px;height:36px;flex:none;display:grid;place-items:center;color:#fff;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.35);border-radius:9px;font-size:1.35rem;line-height:1;cursor:pointer}
+    .record-dialog-close:hover{background:rgba(255,255,255,.22)}
+    .record-dialog-body{max-height:calc(min(82dvh,780px) - 68px);padding:18px 20px 22px;overflow:auto}
+    .record-details-section{margin:0 0 16px;padding:14px;background:#f8fbfe;border:1px solid #dceaf5;border-radius:12px}
+    .record-details-section:last-child{margin-bottom:0}
+    .record-details-section h3{margin:0 0 10px;color:var(--blue-900);font-size:.94rem}
+    .record-details-section dl{margin:0;display:grid;grid-template-columns:minmax(130px,.7fr) minmax(0,1.3fr);gap:0 14px}
+    .record-details-section dt,.record-details-section dd{margin:0;padding:7px 0;border-top:1px solid #e1edf6}
+    .record-details-section dt{color:var(--muted);font-size:.79rem;font-weight:700}
+    .record-details-section dd{color:var(--ink);font-size:.84rem;white-space:pre-wrap;overflow-wrap:anywhere}
+    .record-details-message{margin:0;padding:18px;color:var(--muted);text-align:center}
+    .record-details-message.error{color:#8c3232}
 
     .status{padding:5px 11px;display:inline-flex;align-items:center;color:#225d40;background:#e3f5e9;border-radius:999px;font-size:.72rem;font-weight:700;line-height:1.2;white-space:nowrap}
     /* Appointment status */
@@ -267,6 +301,19 @@ $notificationBadge = $notifications['count'] > 99 ? '99+' : (string) $notificati
       .page-content{padding:12px 11px 18px}
       .stat-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.stat-card{min-height:80px;padding:12px 14px}.stat-label{font-size:.68rem}.stat-value{font-size:1.5rem}
       .dashboard-grid{grid-template-columns:minmax(0,1fr);gap:12px}#todays-appointments,#recent-transactions,#inventory-alerts{grid-column:1}#todays-appointments{grid-row:1}#recent-transactions{grid-row:2}#inventory-alerts{grid-row:3}
+      .records-table.dashboard-records thead{position:absolute;width:1px;height:1px;padding:0;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+      .records-table.dashboard-records tbody{display:grid;gap:8px;padding:8px}
+      .records-table.dashboard-records tbody tr.record-row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));overflow:hidden;background:#fff;border:1px solid #d7e8f5;border-radius:11px}
+      .records-table.dashboard-records tbody tr.record-row:nth-child(even){background:#f8fbfe}
+      .records-table.dashboard-records tbody tr.record-row td{min-width:0;padding:8px 9px;display:grid;align-content:start;gap:3px;border:0;border-bottom:1px solid #e6eff6;font-size:.81rem;text-align:left}
+      .records-table.dashboard-records tbody tr.record-row td::before{content:attr(data-label);color:var(--muted);font-size:.65rem;font-weight:700;letter-spacing:.04em;text-transform:uppercase}
+      .records-table.dashboard-records tbody tr.record-row td.col-center,.records-table.dashboard-records tbody tr.record-row td.col-right{text-align:left}
+      .records-table.dashboard-records tbody tr.empty-row{display:block}
+      .records-table.dashboard-records tbody tr.empty-row td{display:block}
+      .records-table.dashboard-records tbody tr.empty-row td::before{content:none}
+      .record-dialog-header{padding:14px 16px}.record-dialog-body{padding:14px}
+      .record-details-section{padding:11px}.record-details-section dl{grid-template-columns:minmax(0,1fr);gap:0}
+      .record-details-section dt{padding-bottom:2px;border-top:0}.record-details-section dd{padding-top:2px}
       .settings-grid{grid-template-columns:minmax(0,1fr)}.form-grid{grid-template-columns:minmax(0,1fr)}.form-grid .wide{grid-column:1}.summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
     @media(max-width:480px){.topbar-title h1{font-size:1rem}.topbar-title p{font-size:.68rem}.notification{width:30px}.notification svg{width:24px;height:24px}.profile-area{gap:5px}
       .page-intro{align-items:flex-start}.page-intro h2{font-size:1.15rem}.page-intro p{font-size:.78rem}.summary-grid{grid-template-columns:minmax(0,1fr);gap:8px}.summary-card{min-height:76px}.stat-grid{grid-template-columns:minmax(0,1fr)}.stat-card{min-height:72px}
@@ -287,8 +334,8 @@ $notificationBadge = $notifications['count'] > 99 ? '99+' : (string) $notificati
         <a class="nav-item active" href="dashboard.php" aria-current="page"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10.8 12 3l9 7.8v9a1.2 1.2 0 0 1-1.2 1.2h-5.3v-6.2h-5V21H4.2A1.2 1.2 0 0 1 3 19.8z"/></svg><span>Dashboard</span></a>
         <a class="nav-item" href="manage_users.php"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 20v-1.6a3.4 3.4 0 0 0-3.4-3.4H5.4A3.4 3.4 0 0 0 2 18.4V20m7.5-9a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm12.5 9v-1.6a3.4 3.4 0 0 0-2.6-3.3M16.2 3.1a4 4 0 0 1 0 7.7"/></svg><span>Manage Users</span></a>
         <a class="nav-item" href="appointments.php"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4m10-4v4M3 10h18M7 14h3m-3 3h3m4-3h3"/></svg><span>Appointments</span></a>
-        <a class="nav-item" href="schedule_requests.php"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2M4.5 4.5l2 2M19.5 4.5l-2 2"/></svg><span>Vet Schedules</span></a>
-        <a class="nav-item" href="groomer_schedule_requests.php"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2M4.5 4.5l2 2M19.5 4.5l-2 2"/></svg><span>Groomer Schedules</span></a>
+        <a class="nav-item" href="schedule_requests.php"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4m10-4v4M3 10h18"/><circle cx="16" cy="16" r="3"/><path d="M16 14.5V16l1 1"/></svg><span>Vet Schedules</span></a>
+        <a class="nav-item" href="groomer_schedule_requests.php"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14 6 4 4M4 20l8.5-8.5M7 17l-3-3m13-3 3-3a2.1 2.1 0 0 0-3-3l-3 3m-6 6 3 3"/><circle cx="6" cy="6" r="2"/><circle cx="18" cy="18" r="2"/></svg><span>Groomer Schedules</span></a>
         <a class="nav-item" href="inventory.php"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 9 5-9 5-9-5zm-9 9 9 5 9-5m-18 5 9 5 9-5M12 12v9"/></svg><span>Inventory</span></a>
         <a class="nav-item" href="admin_reports.php"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V11h4v9zm6 0V5h4v15zm6 0V8h4v12z"/></svg><span>Reports</span></a>
         <a class="nav-item" href="admin_settings.php"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7z"/><path d="m19.4 15 .1.1 1.1 1.7-1.8 3.1-2-.5a8 8 0 0 1-1.5.9l-.4 2h-3.6l-.4-2a8 8 0 0 1-1.5-.9l-2 .5-1.8-3.1 1.1-1.7a7 7 0 0 1 0-1.8l-1.1-1.7 1.8-3.1 2 .5a8 8 0 0 1 1.5-.9l.4-2h3.6l.4 2a8 8 0 0 1 1.5.9l2-.5 1.8 3.1-1.1 1.7a7 7 0 0 1-.1 1.8z"/></svg><span>Settings</span></a>
@@ -345,13 +392,13 @@ $notificationBadge = $notifications['count'] > 99 ? '99+' : (string) $notificati
         <a class="view-all" href="appointments.php">View All <span aria-hidden="true">→</span></a>
       </div>
       <div class="panel-body">
-      <div class="table-wrap data-table-card">
-        <table class="records-table appointments-table">
-          <colgroup><col style="width:9%"><col style="width:17%"><col style="width:22%"><col style="width:22%"><col style="width:12%"><col style="width:18%"></colgroup>
+      <div class="table-wrap data-table-card<?= $appointments ? ' has-records' : '' ?>">
+        <table class="records-table dashboard-records appointments-table">
+          <colgroup><col style="width:9%"><col style="width:15%"><col style="width:20%"><col style="width:29%"><col style="width:12%"><col style="width:15%"></colgroup>
           <thead><tr><th>ID</th><th>Pet Name</th><th>Owner</th><th>Veterinarian</th><th class="col-center">Time</th><th class="col-center">Status</th></tr></thead>
           <tbody>
             <?php if ($appointments): foreach ($appointments as $appointment): ?>
-              <tr>
+              <tr class="record-row" tabindex="0" title="Select this row to view complete details" aria-haspopup="dialog" data-record-type="appointment" data-record-id="<?= (int) $appointment['appointment_id'] ?>" aria-label="View complete details for appointment #<?= (int) $appointment['appointment_id'] ?>">
                 <td class="col-id" data-label="ID">#<?= (int) $appointment['appointment_id'] ?></td>
                 <td data-label="Pet name" title="<?= e($appointment['pet_name']) ?>"><?= e($appointment['pet_name']) ?></td>
                 <td data-label="Owner" title="<?= e($appointment['owner_name']) ?>"><?= e($appointment['owner_name']) ?></td>
@@ -376,13 +423,13 @@ $notificationBadge = $notifications['count'] > 99 ? '99+' : (string) $notificati
         <a class="view-all" href="admin_reports.php#transactions">View All <span aria-hidden="true">→</span></a>
       </div>
       <div class="panel-body">
-      <div class="table-wrap data-table-card">
-        <table class="records-table transactions-table">
-          <colgroup><col style="width:17%"><col style="width:29%"><col style="width:18%"><col style="width:18%"><col style="width:18%"></colgroup>
+      <div class="table-wrap data-table-card<?= $transactions ? ' has-records' : '' ?>">
+        <table class="records-table dashboard-records transactions-table">
+          <colgroup><col style="width:18%"><col style="width:25%"><col style="width:17%"><col style="width:19%"><col style="width:21%"></colgroup>
           <thead><tr><th>ID</th><th>Client</th><th class="col-right">Amount</th><th class="col-center">Date</th><th class="col-center">Method</th></tr></thead>
           <tbody>
             <?php if ($transactions): foreach ($transactions as $transaction): ?>
-              <tr>
+              <tr class="record-row" tabindex="0" title="Select this row to view complete details" aria-haspopup="dialog" data-record-type="transaction" data-record-id="<?= (int) $transaction['payment_id'] ?>" aria-label="View complete details for transaction TRX-<?= (int) $transaction['payment_id'] ?>">
                 <td class="col-id" data-label="ID">#TRX-<?= (int) $transaction['payment_id'] ?></td>
                 <td data-label="Client" title="<?= e($transaction['client_name']) ?>"><?= e($transaction['client_name']) ?></td>
                 <td class="col-right col-money" data-label="Amount">₱<?= number_format((float) $transaction['amount_paid'], 2) ?></td>
@@ -404,9 +451,9 @@ $notificationBadge = $notifications['count'] > 99 ? '99+' : (string) $notificati
         <a class="view-all" href="inventory.php">View All <span aria-hidden="true">→</span></a>
       </div>
       <div class="panel-body">
-      <div class="table-wrap data-table-card">
-        <table class="records-table inventory-table">
-          <colgroup><col style="width:40%"><col style="width:15%"><col style="width:22%"><col style="width:23%"></colgroup>
+      <div class="table-wrap data-table-card<?= $inventoryAlerts ? ' has-records' : '' ?>">
+        <table class="records-table dashboard-records inventory-table">
+          <colgroup><col style="width:43%"><col style="width:14%"><col style="width:20%"><col style="width:23%"></colgroup>
           <thead><tr><th>Medicine</th><th class="col-center">Quantity</th><th class="col-center">Expiration Date</th><th class="col-center">Status</th></tr></thead>
           <tbody>
             <?php if ($inventoryAlerts): foreach ($inventoryAlerts as $item):
@@ -430,7 +477,7 @@ $notificationBadge = $notifications['count'] > 99 ? '99+' : (string) $notificati
                     $inventoryClass = 'in_stock';
                 }
             ?>
-              <tr>
+              <tr class="record-row" tabindex="0" title="Select this row to view complete details" aria-haspopup="dialog" data-record-type="inventory" data-record-id="<?= (int) $item['inventory_id'] ?>" aria-label="View complete details for inventory item <?= e($item['item_name']) ?>">
                 <td data-label="Medicine" title="<?= e($item['item_name']) ?>"><?= e($item['item_name']) ?></td>
                 <td class="col-center" data-label="Quantity"><?= number_format($quantity) ?></td>
                 <td class="col-center" data-label="Expiration date"><?= e($formatDate($item['expiration_date'])) ?></td>
@@ -446,10 +493,140 @@ $notificationBadge = $notifications['count'] > 99 ? '99+' : (string) $notificati
     </section>
   </div>
 </div>
+<dialog class="record-dialog" id="record-details-dialog" aria-labelledby="record-details-title">
+  <div class="record-dialog-header">
+    <h2 id="record-details-title">Record details</h2>
+    <button class="record-dialog-close" type="button" aria-label="Close record details">&times;</button>
+  </div>
+  <div class="record-dialog-body" id="record-details-content" aria-live="polite"></div>
+</dialog>
       </main>
     </div>
   </div>
   <script src="../assets/JS/admin-shell.js" defer></script>
   <script src="../assets/JS/admin_notifications.js" defer></script>
+  <script>
+    (() => {
+      const dialog = document.getElementById('record-details-dialog');
+      const title = document.getElementById('record-details-title');
+      const content = document.getElementById('record-details-content');
+      const closeButton = dialog.querySelector('.record-dialog-close');
+      let requestNumber = 0;
+      let activeRequest = null;
+      let openerRow = null;
+
+      const showMessage = (message, isError) => {
+        const paragraph = document.createElement('p');
+        paragraph.className = `record-details-message${isError ? ' error' : ''}`;
+        paragraph.textContent = message;
+        content.replaceChildren(paragraph);
+      };
+
+      const renderDetails = (sections) => {
+        content.replaceChildren();
+        sections.forEach((section) => {
+          const sectionElement = document.createElement('section');
+          sectionElement.className = 'record-details-section';
+          const heading = document.createElement('h3');
+          heading.textContent = section.heading;
+          const list = document.createElement('dl');
+          section.fields.forEach((field) => {
+            const label = document.createElement('dt');
+            label.textContent = field.label;
+            const value = document.createElement('dd');
+            value.textContent = field.value;
+            list.append(label, value);
+          });
+          sectionElement.append(heading, list);
+          content.append(sectionElement);
+        });
+      };
+
+      const openRecord = async (row) => {
+        const type = row.dataset.recordType;
+        const id = row.dataset.recordId;
+        openerRow = row;
+        const currentRequest = ++requestNumber;
+        if (activeRequest) {
+          activeRequest.abort();
+        }
+        activeRequest = new AbortController();
+        title.textContent = 'Loading record details…';
+        showMessage('Loading complete record details…', false);
+        if (!dialog.open) {
+          dialog.showModal();
+        }
+
+        try {
+          const query = new URLSearchParams({ type, id });
+          const response = await fetch(`dashboard_record.php?${query.toString()}`, {
+            headers: { Accept: 'application/json' },
+            cache: 'no-store',
+            signal: activeRequest.signal,
+          });
+          let payload;
+          try {
+            payload = await response.json();
+          } catch {
+            throw new Error('Record details could not be read. Please try again.');
+          }
+          if (currentRequest !== requestNumber) {
+            return;
+          }
+          if (!response.ok) {
+            throw new Error(payload.error || 'Record details are unavailable.');
+          }
+          if (payload.record_type !== type || Number(payload.record_id) !== Number(id)
+            || typeof payload.title !== 'string' || !Array.isArray(payload.sections)) {
+            throw new Error('The server returned details for a different record.');
+          }
+          title.textContent = payload.title;
+          renderDetails(payload.sections);
+        } catch (error) {
+          if (error.name === 'AbortError' || currentRequest !== requestNumber) {
+            return;
+          }
+          title.textContent = 'Record details';
+          showMessage(error.message || 'Record details are unavailable. Please try again.', true);
+        }
+      };
+
+      document.addEventListener('click', (event) => {
+        const row = event.target.closest('.record-row[data-record-type][data-record-id]');
+        if (row) {
+          openRecord(row);
+        }
+      });
+
+      document.addEventListener('keydown', (event) => {
+        if (event.key !== 'Enter' && event.key !== ' ') {
+          return;
+        }
+        const row = event.target.closest('.record-row[data-record-type][data-record-id]');
+        if (row) {
+          event.preventDefault();
+          openRecord(row);
+        }
+      });
+
+      closeButton.addEventListener('click', () => dialog.close());
+      dialog.addEventListener('click', (event) => {
+        if (event.target === dialog) {
+          dialog.close();
+        }
+      });
+      dialog.addEventListener('close', () => {
+        requestNumber += 1;
+        if (activeRequest) {
+          activeRequest.abort();
+          activeRequest = null;
+        }
+        if (openerRow && openerRow.isConnected) {
+          openerRow.focus();
+        }
+        openerRow = null;
+      });
+    })();
+  </script>
 </body>
 </html>

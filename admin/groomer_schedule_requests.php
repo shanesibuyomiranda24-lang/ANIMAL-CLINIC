@@ -125,7 +125,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                         'schedule',
                         'Grooming schedule request ' . strtolower($newStatus),
                         'Your working hours request was ' . strtolower($newStatus) . '.' . ($reviewNote !== '' ? ' Admin note: ' . $reviewNote : ''),
-                        'staff/groomer_schedule.php',
+                        'groomer/schedules.php',
                         'groomer_schedule_reviewed_' . (int) $requestId
                     );
                     role_log($pdo, (int) $_SESSION['user_id'], 'groomer.schedule.' . strtolower($newStatus), 'groomer_schedule_request', (int) $requestId, $reviewNote !== '' ? $reviewNote : $profile['full_name']);
@@ -182,7 +182,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                         'Your leave request from ' . date('M j, Y', strtotime((string) $leave['start_date']))
                             . ' to ' . date('M j, Y', strtotime((string) $leave['end_date']))
                             . ' was ' . strtolower($newStatus) . '.' . ($reviewNote !== '' ? ' Admin note: ' . $reviewNote : ''),
-                        'staff/groomer_schedule.php',
+                        'groomer/schedules.php',
                         'groomer_leave_reviewed_' . (int) $requestId
                     );
                     role_log($pdo, (int) $_SESSION['user_id'], 'groomer.leave.' . strtolower($newStatus), 'groomer_leave', (int) $requestId, $reviewNote !== '' ? $reviewNote : $leave['full_name']);
@@ -234,8 +234,12 @@ role_render('admin', ['groomer_schedules'], 'Groomer Schedule Requests', 'Approv
     <?php if ($success !== ''): ?><div class="notice success" role="status"><?= e($success) ?></div><?php endif; ?>
     <section class="panel">
       <div class="panel-header"><h2>Working hours awaiting approval</h2><span class="data-count"><?= count($scheduleRequests) ?> pending</span></div>
-      <?php if ($scheduleRequests): ?>
-        <div class="table-wrap data-table-card"><table class="records-table"><thead><tr><th>Groomer</th><th>Submitted</th><th>Requested weekly hours</th><th>Review</th></tr></thead><tbody>
+      <div class="table-wrap data-table-card">
+        <table class="records-table">
+          <colgroup><col style="width:22%"><col style="width:12rem"><col style="width:34%"><col style="width:18rem"></colgroup>
+          <thead><tr><th>Groomer</th><th>Submitted</th><th>Requested weekly hours</th><th>Review</th></tr></thead>
+          <tbody>
+          <?php if ($scheduleRequests): ?>
           <?php foreach ($scheduleRequests as $request): $requestId = (int) $request['request_id']; ?>
             <tr>
               <td data-label="Groomer"><?= e($request['full_name']) ?></td>
@@ -256,13 +260,21 @@ role_render('admin', ['groomer_schedules'], 'Groomer Schedule Requests', 'Approv
               </form></td>
             </tr>
           <?php endforeach; ?>
-        </tbody></table></div>
-      <?php else: ?><div class="empty"><strong>No working-hour requests</strong><span>Groomer schedules will appear here for review.</span></div><?php endif; ?>
+          <?php else: ?>
+            <tr class="empty-row"><td colspan="4"><div class="empty-state-box" role="status"><strong>No working-hour requests</strong><span>Groomer schedules will appear here for review.</span></div></td></tr>
+          <?php endif; ?>
+          </tbody>
+        </table>
+      </div>
     </section>
     <section class="panel">
       <div class="panel-header"><h2>Leave awaiting approval</h2><span class="data-count"><?= count($leaveRequests) ?> pending</span></div>
-      <?php if ($leaveRequests): ?>
-        <div class="table-wrap data-table-card"><table class="records-table"><thead><tr><th>Groomer</th><th>Requested dates</th><th>Reason</th><th>Review</th></tr></thead><tbody>
+      <div class="table-wrap data-table-card">
+        <table class="records-table">
+          <colgroup><col style="width:22%"><col style="width:14rem"><col style="width:30%"><col style="width:18rem"></colgroup>
+          <thead><tr><th>Groomer</th><th>Requested dates</th><th>Reason</th><th>Review</th></tr></thead>
+          <tbody>
+          <?php if ($leaveRequests): ?>
           <?php foreach ($leaveRequests as $leave): ?>
             <tr>
               <td data-label="Groomer"><?= e($leave['full_name']) ?></td>
@@ -276,8 +288,12 @@ role_render('admin', ['groomer_schedules'], 'Groomer Schedule Requests', 'Approv
               </form></td>
             </tr>
           <?php endforeach; ?>
-        </tbody></table></div>
-      <?php else: ?><div class="empty"><strong>No leave requests</strong><span>Pending leave will not affect client booking until Admin approves it.</span></div><?php endif; ?>
+          <?php else: ?>
+            <tr class="empty-row"><td colspan="4"><div class="empty-state-box" role="status"><strong>No leave requests</strong><span>Pending leave will not affect client booking until Admin approves it.</span></div></td></tr>
+          <?php endif; ?>
+          </tbody>
+        </table>
+      </div>
     </section>
     <?php
 });

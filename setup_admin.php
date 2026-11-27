@@ -12,7 +12,7 @@ if (!$isLocalRequest) {
 
 $fullName = 'admin';
 $email = 'admin@animalclinic.local';
-$password = 'admin123';
+$password = 'Admin@123';
 $message = '';
 $messageType = '';
 $setupComplete = false;
@@ -85,7 +85,7 @@ try {
     <p>This local-only, one-time setup creates the development Admin account. Do not deploy this script to a public server.</p>
     <?php if ($message): ?><p class="message <?= e($messageType) ?>" role="status"><?= e($message) ?></p><?php endif; ?>
     <?php if (!$setupComplete): ?>
-      <p>Account: <strong>admin@animalclinic.local</strong><br>Password: <strong>admin123</strong></p>
+      <p>Account: <strong>admin@animalclinic.local</strong><br>Password: <strong>Admin@123</strong></p>
       <form method="post">
         <input type="hidden" name="csrf" value="<?= e(csrf_token()) ?>">
         <button type="submit">Create initial Admin</button>

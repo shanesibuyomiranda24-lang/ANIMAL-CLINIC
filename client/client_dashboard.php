@@ -7,19 +7,21 @@ $unpaid = $services = [];
 $petCount = $upcomingCount = $vaccineCount = 0;
 $upcoming = [];
 if (!$c['dbError']) {
-    $petTotal = qall($pdo, 'SELECT COUNT(*) AS total FROM Pets WHERE owner_id = ?', [$c['ownerId']]);
+    $petTotal = qall($pdo, 'SELECT COUNT(*) AS total FROM Pets WHERE owner_id = ? AND archived_at IS NULL', [$c['ownerId']]);
     $petCount = (int) ($petTotal[0]['total'] ?? 0);
     $upcoming = client_upcoming($pdo, $c['ownerId'], 1);
     $visitCount = qall($pdo,
         "SELECT COUNT(*) AS total FROM Appointments a JOIN Pets p ON p.pet_id = a.pet_id
-         WHERE p.owner_id = ? AND a.appointment_date >= CURRENT_DATE AND a.status IN ('Pending','Scheduled','Check-in','In Consultation')", [$c['ownerId']]);
+         WHERE p.owner_id = ? AND p.archived_at IS NULL AND a.archived_at IS NULL
+           AND a.appointment_date >= CURRENT_DATE AND a.status IN ('Pending','Scheduled','Check-in','In Consultation')", [$c['ownerId']]);
     $upcomingCount = (int) ($visitCount[0]['total'] ?? 0);
     $unpaid = client_unpaid($pdo, $c['ownerId']);
     $services = qall($pdo, 'SELECT service_id, service_name, base_price, duration_minutes, description FROM Services WHERE is_active = 1 ORDER BY service_name');
     $vaccineTotal = qall($pdo,
         'SELECT COUNT(*) AS total
          FROM Vaccinations v JOIN Pets p ON p.pet_id = v.pet_id
-         WHERE p.owner_id = ? AND v.next_due_date <= DATE_ADD(CURRENT_DATE, INTERVAL 30 DAY)', [$c['ownerId']]);
+         WHERE p.owner_id = ? AND p.archived_at IS NULL
+           AND v.next_due_date <= DATE_ADD(CURRENT_DATE, INTERVAL 30 DAY)', [$c['ownerId']]);
     $vaccineCount = (int) ($vaccineTotal[0]['total'] ?? 0);
 }
 $balance = 0.0;

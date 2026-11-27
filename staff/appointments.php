@@ -178,7 +178,7 @@ function staff_assert_appointment_available(PDO $pdo, array $appointment): void
         "SELECT a.appointment_id
          FROM Appointments a
          JOIN AppointmentServices aps ON aps.appointment_id = a.appointment_id
-         WHERE aps.groomer_id = ? AND a.appointment_id <> ?
+         WHERE aps.groomer_id = ? AND a.archived_at IS NULL AND a.appointment_id <> ?
            AND a.appointment_date < ?
            AND DATE_ADD(a.appointment_date, INTERVAL a.duration_minutes MINUTE) > ?
            AND a.status IN ($statusPlaceholders)
@@ -289,7 +289,7 @@ function staff_assert_appointment_available(PDO $pdo, array $appointment): void
     $dailyCount = $pdo->prepare(
         "SELECT COUNT(*)
          FROM Appointments
-         WHERE vet_id = ? AND DATE(appointment_date) = ? AND appointment_id <> ?
+         WHERE vet_id = ? AND archived_at IS NULL AND DATE(appointment_date) = ? AND appointment_id <> ?
            AND status IN ($capacityPlaceholders)
          FOR UPDATE"
     );
@@ -307,7 +307,7 @@ function staff_assert_appointment_available(PDO $pdo, array $appointment): void
     $conflictStatement = $pdo->prepare(
         "SELECT appointment_id
          FROM Appointments
-         WHERE vet_id = ? AND appointment_id <> ?
+         WHERE vet_id = ? AND archived_at IS NULL AND appointment_id <> ?
            AND appointment_date < ?
            AND DATE_ADD(appointment_date, INTERVAL duration_minutes MINUTE) > ?
            AND status IN ($statusPlaceholders)
@@ -455,7 +455,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
         $action = posted_string('action');
         try {
             $pdo->beginTransaction();
-            $a = $pdo->prepare('SELECT a.*,p.owner_id FROM Appointments a JOIN Pets p ON p.pet_id=a.pet_id WHERE appointment_id=? FOR UPDATE');
+            $a = $pdo->prepare('SELECT a.*,p.owner_id FROM Appointments a JOIN Pets p ON p.pet_id=a.pet_id WHERE a.appointment_id=? AND a.archived_at IS NULL AND p.archived_at IS NULL FOR UPDATE');
             $a->execute([$id]);
             $row = $a->fetch();
             if (!$row) {
@@ -587,7 +587,7 @@ role_render('staff', ['appointments'], 'Appointments', 'Approve, monitor and can
     $sort = $filters['sort'];
     $appointmentId = $filters['appointmentId'];
     $vetFilter = $filters['vet'];
-    $where = $filters['where'];
+    $where = $filters['where'] . ' AND a.archived_at IS NULL AND p.archived_at IS NULL';
     $params = $filters['params'];
     $page = max(1, (int) ($_GET['page'] ?? 1));
     $perPage = 12;
@@ -626,21 +626,30 @@ role_render('staff', ['appointments'], 'Appointments', 'Approve, monitor and can
 
     // ---- Summary numbers (not affected by the filters) ----
     $counts = array_fill_keys($allStatuses, 0);
-    foreach ($pdo->query('SELECT status, COUNT(*) AS total FROM Appointments GROUP BY status')->fetchAll() as $r) {
+    foreach ($pdo->query(
+        'SELECT a.status, COUNT(*) AS total
+         FROM Appointments a JOIN Pets p ON p.pet_id = a.pet_id
+         WHERE a.archived_at IS NULL AND p.archived_at IS NULL
+         GROUP BY a.status'
+    )->fetchAll() as $r) {
         if (isset($counts[$r['status']])) {
             $counts[$r['status']] = (int) $r['total'];
         }
     }
     $allCount = array_sum($counts);
     $todayCount = (int) $pdo->query(
-        "SELECT COUNT(*) FROM Appointments
-         WHERE appointment_date >= CURRENT_DATE AND appointment_date < DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY)
+        "SELECT COUNT(*) FROM Appointments a
+         JOIN Pets p ON p.pet_id = a.pet_id
+         WHERE a.archived_at IS NULL AND p.archived_at IS NULL
+           AND a.appointment_date >= CURRENT_DATE AND a.appointment_date < DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY)
            AND status NOT IN ('Cancelled','Rejected')"
     )->fetchColumn();
     $upcomingCount = (int) $pdo->query(
-        "SELECT COUNT(*) FROM Appointments
-         WHERE appointment_date >= DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY)
-           AND status NOT IN ('Cancelled','Rejected')"
+        "SELECT COUNT(*) FROM Appointments a
+         JOIN Pets p ON p.pet_id = a.pet_id
+         WHERE a.archived_at IS NULL AND p.archived_at IS NULL
+           AND a.appointment_date >= DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY)
+           AND a.status NOT IN ('Cancelled','Rejected')"
     )->fetchColumn();
     $vets = $pdo->query('SELECT vet_id, full_name FROM Veterinarians ORDER BY full_name')->fetchAll();
     $vetList = array_map(static fn(array $vet): array => [

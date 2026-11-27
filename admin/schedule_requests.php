@@ -309,12 +309,12 @@ role_render('admin', ['schedules'], 'Veterinarian Schedule Requests', 'Review an
     ?>
     <section class="panel schedule-request-panel schedule-review-panel">
       <div class="panel-header"><h2>Working schedule requests</h2><span class="data-count"><?= count($scheduleRequests) ?> pending</span></div>
-      <?php if ($scheduleRequests): ?>
-        <div class="table-wrap data-table-card">
-          <table class="records-table">
-            <colgroup><col style="width:25%"><col style="width:10rem"><col style="width:34%"><col style="width:18rem"></colgroup>
-            <thead><tr><th>Veterinarian</th><th>Submitted</th><th>Requested weekly hours</th><th>Review</th></tr></thead>
-            <tbody>
+      <div class="table-wrap data-table-card">
+        <table class="records-table">
+          <colgroup><col style="width:25%"><col style="width:10rem"><col style="width:34%"><col style="width:18rem"></colgroup>
+          <thead><tr><th>Veterinarian</th><th>Submitted</th><th>Requested weekly hours</th><th>Review</th></tr></thead>
+          <tbody>
+            <?php if ($scheduleRequests): ?>
               <?php foreach ($scheduleRequests as $index => $request): ?>
                 <?php $requestId = (int) $request['request_id']; ?>
                 <tr<?= $index % 2 ? ' class="alt"' : '' ?>>
@@ -340,22 +340,22 @@ role_render('admin', ['schedules'], 'Veterinarian Schedule Requests', 'Review an
                   </td>
                 </tr>
               <?php endforeach; ?>
-            </tbody>
-          </table>
-        </div>
-      <?php else: ?>
-        <div class="empty"><strong>No working schedule requests</strong><span>Veterinarian proposals will appear here for review.</span></div>
-      <?php endif; ?>
+            <?php else: ?>
+              <tr class="empty-row"><td colspan="4"><div class="empty-state-box" role="status"><strong>No working schedule requests</strong><span>Veterinarian proposals will appear here for review.</span></div></td></tr>
+            <?php endif; ?>
+          </tbody>
+        </table>
+      </div>
     </section>
 
     <section class="panel schedule-request-panel schedule-review-panel">
       <div class="panel-header"><h2>Leave requests</h2><span class="data-count"><?= count($leaveRequests) ?> pending</span></div>
-      <?php if ($leaveRequests): ?>
-        <div class="table-wrap data-table-card">
-          <table class="records-table">
-            <colgroup><col style="width:27%"><col style="width:14rem"><col style="width:30%"><col style="width:18rem"></colgroup>
-            <thead><tr><th>Veterinarian</th><th>Requested dates</th><th>Reason</th><th>Review</th></tr></thead>
-            <tbody>
+      <div class="table-wrap data-table-card">
+        <table class="records-table">
+          <colgroup><col style="width:27%"><col style="width:14rem"><col style="width:30%"><col style="width:18rem"></colgroup>
+          <thead><tr><th>Veterinarian</th><th>Requested dates</th><th>Reason</th><th>Review</th></tr></thead>
+          <tbody>
+            <?php if ($leaveRequests): ?>
               <?php foreach ($leaveRequests as $index => $request): ?>
                 <tr<?= $index % 2 ? ' class="alt"' : '' ?>>
                   <td data-label="Veterinarian"><?= e($request['vet_name']) ?></td>
@@ -371,12 +371,12 @@ role_render('admin', ['schedules'], 'Veterinarian Schedule Requests', 'Review an
                   </td>
                 </tr>
               <?php endforeach; ?>
-            </tbody>
-          </table>
-        </div>
-      <?php else: ?>
-        <div class="empty"><strong>No leave requests</strong><span>Pending leave dates do not affect availability until approved.</span></div>
-      <?php endif; ?>
+            <?php else: ?>
+              <tr class="empty-row"><td colspan="4"><div class="empty-state-box" role="status"><strong>No leave requests</strong><span>Pending leave dates do not affect availability until approved.</span></div></td></tr>
+            <?php endif; ?>
+          </tbody>
+        </table>
+      </div>
     </section>
     <?php
 });

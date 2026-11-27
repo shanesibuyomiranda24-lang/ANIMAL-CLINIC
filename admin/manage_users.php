@@ -2,24 +2,20 @@
 date_default_timezone_set('Asia/Manila');
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/database.php';
+require_once __DIR__ . '/../includes/passwords.php';
 require_once __DIR__ . '/../includes/audit_log.php';
 require_once __DIR__ . '/../includes/notifications.php';
 require_role(['admin']);
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
 
 $error = '';
 $success = '';
 $passwordWeak = false;
-
-// Admin-created accounts require a long password with mixed character types.
-function admin_password_is_strong(string $password): bool
-{
-    return strlen($password) >= 7
-        && strlen($password) <= 72
-        && preg_match('/[a-z]/', $password)
-        && preg_match('/[A-Z]/', $password)
-        && preg_match('/[0-9]/', $password)
-        && preg_match('/[^A-Za-z0-9]/', $password);
-}
+$resetCredentials = $_SESSION['user_password_reset_flash'] ?? null;
+$passwordRequestFlash = $_SESSION['password_request_flash'] ?? null;
+unset($_SESSION['user_password_reset_flash']);
+unset($_SESSION['password_request_flash']);
 
 /* ------------------------------------------------------------------
    Create account / change status
@@ -48,7 +44,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                     $error = 'Enter a valid email address.';
                 } elseif (!in_array($accountRole, ['staff', 'vet'], true)) {
                     $error = 'Only Staff and Veterinarian accounts can be created here.';
-                } elseif (!admin_password_is_strong($password)) {
+                } elseif (password_policy_error($password) !== '') {
                     // No banner text: the "Weak password" popup is shown on the field instead.
                     $passwordWeak = true;
                 } elseif ($accountRole === 'vet' && ($licenseNumber === '' || strlen($licenseNumber) > 20)) {
@@ -140,9 +136,21 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                 } elseif ((int) $userId === (int) $_SESSION['user_id'] && $status === 'inactive') {
                     $error = 'You cannot deactivate your own account.';
                 } else {
-                    $update = $pdo->prepare('UPDATE Users SET status = ? WHERE user_id = ?');
+                    $update = $pdo->prepare('UPDATE Users SET status = ? WHERE user_id = ? AND archived_at IS NULL');
                     $update->execute([$status, $userId]);
-                    $success = $update->rowCount() ? 'Account status updated.' : 'Account status is unchanged or the account no longer exists.';
+                    if ($update->rowCount()) {
+                        audit_log_record(
+                            $pdo,
+                            (int) $_SESSION['user_id'],
+                            $status === 'active' ? 'user.account.reactivated' : 'user.account.deactivated',
+                            'user',
+                            (int) $userId,
+                            'Account status changed to ' . $status
+                        );
+                        $success = 'Account status updated.';
+                    } else {
+                        $success = 'Account status is unchanged or the account no longer exists.';
+                    }
                 }
             } elseif ($action === 'set_schedule_permission') {
                 $userId = filter_var(posted_string('user_id'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
@@ -270,7 +278,8 @@ $users = [];
 $listError = '';
 try {
     $statement = db()->prepare(
-        "SELECT u.user_id, u.full_name, u.email, u.`role`, u.status, u.created_at, u.staff_id, u.vet_id,
+        "SELECT u.user_id, u.full_name, u.email, u.`role`, u.status, u.must_change_password,
+          u.created_at, u.staff_id, u.vet_id,
           COALESCE(s.can_manage_vet_schedules, 0) AS can_manage_vet_schedules,
                 COALESCE(s.can_manage_groomer_schedules, 0) AS can_manage_groomer_schedules,
           COALESCE(s.`role`, '') AS staff_position,
@@ -286,6 +295,7 @@ try {
                 THEN 1 ELSE 0 END AS has_pending_schedule_or_leave_request
          FROM Users u
          LEFT JOIN Staff s ON s.staff_id = u.staff_id
+         WHERE u.archived_at IS NULL
          ORDER BY u.created_at DESC, u.user_id DESC"
     );
     $statement->execute();
@@ -304,6 +314,32 @@ try {
 } catch (Throwable $ex) {
     error_log('Veterinarian capacity list failed: ' . $ex->getMessage());
     $listError = 'Veterinarian booking capacity is unavailable.';
+}
+$passwordRequests = [];
+$passwordRequestsError = '';
+try {
+    $requestQuery = "SELECT r.request_id, r.request_email, r.user_id, r.status AS request_status,
+                r.submitted_at, r.verification_method, r.verification_result, r.verification_notes,
+                r.verified_by_user_id,
+                u.full_name AS account_name, u.email AS account_email,
+                u.`role` AS account_role, u.status AS account_status, u.archived_at AS account_archived_at,
+                u.created_at AS account_created_at,
+                COALESCE(o.phone, s.contact_number, v.contact_number) AS verification_contact,
+                verifier.full_name AS verified_by_name
+         FROM PasswordRecoveryRequests r
+         LEFT JOIN Users u ON u.user_id = r.user_id
+         LEFT JOIN PetOwners o ON o.owner_id = u.owner_id
+         LEFT JOIN Staff s ON s.staff_id = u.staff_id
+         LEFT JOIN Veterinarians v ON v.vet_id = u.vet_id
+         LEFT JOIN Users verifier ON verifier.user_id = r.verified_by_user_id";
+    $pendingStatement = db()->prepare(
+        $requestQuery . " WHERE r.status = 'Pending' ORDER BY r.submitted_at ASC, r.request_id ASC"
+    );
+    $pendingStatement->execute();
+    $passwordRequests = $pendingStatement->fetchAll();
+} catch (Throwable $ex) {
+    error_log('Password recovery request list failed: ' . $ex->getMessage());
+    $passwordRequestsError = 'Password recovery requests are unavailable. Check the database connection and migration.';
 }
 
 require_once __DIR__ . '/../includes/admin_notifications.php';
@@ -450,10 +486,10 @@ $filterRoles = ['admin', 'staff', 'vet', 'client'];
       <a class="brand-lockup" href="dashboard.php"><img class="brand-logo" src="../assets/images/Animal%20Clinic%20Heart%20Emblem%20Transparent.png" alt="Animal Clinic"><span class="brand-copy">Animal Clinic<span>Management System</span></span></a>
       <nav class="side-nav" aria-label="Admin navigation">
         <a class="nav-item" href="dashboard.php"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10.8 12 3l9 7.8v9a1.2 1.2 0 0 1-1.2 1.2h-5.3v-6.2h-5V21H4.2A1.2 1.2 0 0 1 3 19.8z"/></svg><span>Dashboard</span></a>
-        <a class="nav-item active" href="manage_users.php"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 20v-1.6a3.4 3.4 0 0 0-3.4-3.4H5.4A3.4 3.4 0 0 0 2 18.4V20m7.5-9a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm12.5 9v-1.6a3.4 3.4 0 0 0-2.6-3.3M16.2 3.1a4 4 0 0 1 0 7.7"/></svg><span>Manage Users</span></a>
+        <a class="nav-item active" href="manage_users.php" aria-current="page"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 20v-1.6a3.4 3.4 0 0 0-3.4-3.4H5.4A3.4 3.4 0 0 0 2 18.4V20m7.5-9a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm12.5 9v-1.6a3.4 3.4 0 0 0-2.6-3.3M16.2 3.1a4 4 0 0 1 0 7.7"/></svg><span>Manage Users</span></a>
         <a class="nav-item" href="appointments.php"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4m10-4v4M3 10h18M7 14h3m-3 3h3m4-3h3"/></svg><span>Appointments</span></a>
-        <a class="nav-item" href="schedule_requests.php"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2M4.5 4.5l2 2M19.5 4.5l-2 2"/></svg><span>Vet Schedules</span></a>
-        <a class="nav-item" href="groomer_schedule_requests.php"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2M4.5 4.5l2 2M19.5 4.5l-2 2"/></svg><span>Groomer Schedules</span></a>
+        <a class="nav-item" href="schedule_requests.php"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4m10-4v4M3 10h18"/><circle cx="16" cy="16" r="3"/><path d="M16 14.5V16l1 1"/></svg><span>Vet Schedules</span></a>
+        <a class="nav-item" href="groomer_schedule_requests.php"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14 6 4 4M4 20l8.5-8.5M7 17l-3-3m13-3 3-3a2.1 2.1 0 0 0-3-3l-3 3m-6 6 3 3"/><circle cx="6" cy="6" r="2"/><circle cx="18" cy="18" r="2"/></svg><span>Groomer Schedules</span></a>
         <a class="nav-item" href="inventory.php"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 9 5-9 5-9-5zm-9 9 9 5 9-5m-18 5 9 5 9-5M12 12v9"/></svg><span>Inventory</span></a>
         <a class="nav-item" href="admin_reports.php"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V11h4v9zm6 0V5h4v15zm6 0V8h4v12z"/></svg><span>Reports</span></a>
         <a class="nav-item" href="admin_settings.php"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7z"/><path d="m19.4 15 .1.1 1.1 1.7-1.8 3.1-2-.5a8 8 0 0 1-1.5.9l-.4 2h-3.6l-.4-2a8 8 0 0 1-1.5-.9l-2 .5-1.8-3.1 1.1-1.7a7 7 0 0 1 0-1.8l-1.1-1.7 1.8-3.1 2 .5a8 8 0 0 1 1.5-.9l.4-2h3.6l.4 2a8 8 0 0 1 1.5.9l2-.5 1.8 3.1-1.1 1.7a7 7 0 0 1-.1 1.8z"/></svg><span>Settings</span></a>
@@ -469,7 +505,20 @@ $filterRoles = ['admin', 'staff', 'vet', 'client'];
       <main class="page-content">
         <?php if ($error): ?><div class="notice error" role="alert"><?= e($error) ?></div><?php endif; ?>
         <?php if ($success): ?><div class="notice success" role="status"><?= e($success) ?></div><?php endif; ?>
+        <?php if (is_array($resetCredentials)): ?>
+          <div class="notice success" role="status">
+            Temporary password for <strong><?= e((string) ($resetCredentials['email'] ?? 'the account')) ?></strong>:
+            <code><?= e((string) ($resetCredentials['password'] ?? '')) ?></code>
+            Share it privately. It is shown only once, and the user must choose a new password at next login.
+          </div>
+        <?php endif; ?>
+        <?php if (is_array($passwordRequestFlash)): ?>
+          <div class="notice <?= ($passwordRequestFlash['type'] ?? '') === 'error' ? 'error' : 'success' ?>" role="<?= ($passwordRequestFlash['type'] ?? '') === 'error' ? 'alert' : 'status' ?>">
+            <?= e((string) ($passwordRequestFlash['message'] ?? 'Password recovery request updated.')) ?>
+          </div>
+        <?php endif; ?>
         <?php if ($listError): ?><div class="notice error" role="alert"><?= e($listError) ?></div><?php endif; ?>
+        <?php if ($passwordRequestsError !== ''): ?><div class="notice error" role="alert"><?= e($passwordRequestsError) ?></div><?php endif; ?>
 
         <section class="panel">
           <div class="panel-header"><h2>Create Staff or Veterinarian account</h2></div>
@@ -480,7 +529,7 @@ $filterRoles = ['admin', 'staff', 'vet', 'client'];
               <label>Email address<input type="email" name="email" required maxlength="254" autocomplete="email"></label>
               <label>Password
                 <span class="pw-wrap">
-                  <input type="password" id="password" name="password" required minlength="7" maxlength="72" autocomplete="new-password" aria-describedby="password-requirements"<?= $passwordWeak ? ' class="invalid"' : '' ?>>
+                  <input type="password" id="password" name="password" required minlength="7" maxlength="14" autocomplete="new-password" aria-describedby="password-requirements"<?= $passwordWeak ? ' class="invalid"' : '' ?>>
                   <button type="button" class="pw-toggle" aria-label="Show password" aria-pressed="false">
                     <svg class="eye-open" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                       <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5ZM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5Zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3Z"/>
@@ -491,10 +540,10 @@ $filterRoles = ['admin', 'staff', 'vet', 'client'];
                   </button>
                   <span class="pw-tip<?= $passwordWeak ? ' show' : '' ?>" id="pwTip" role="alert">
                     <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm1 15h-2v-2h2v2Zm0-4h-2V7h2v6Z"/></svg>
-                    <span>Use 7+ characters with uppercase, lowercase, a number, and a symbol.</span>
+                    <span><?= e(password_policy_description()) ?></span>
                   </span>
                 </span>
-                <span class="pw-requirements" id="password-requirements">At least 7 characters, including uppercase, lowercase, a number, and a symbol.</span>
+                <span class="pw-requirements" id="password-requirements"><?= e(password_policy_description()) ?></span>
               </label>
               <label>Account type<select name="role" id="account-role" required><option value="staff">Staff</option><option value="vet">Veterinarian</option></select></label>
               <label class="vet-only" hidden>Veterinarian license number<input type="text" name="license_number" id="license-number" maxlength="20"></label>
@@ -519,10 +568,9 @@ $filterRoles = ['admin', 'staff', 'vet', 'client'];
         <section class="panel">
           <div class="panel-header"><div class="panel-title"><h2>Veterinarian daily booking capacity</h2></div><span class="data-count">Confirmed appointments only</span></div>
           <div class="panel-body">
-            <p class="muted">Each veterinarian defaults to 10 confirmed appointments per day. Pending requests, cancelled visits and rejected visits do not count. The existing conflict check still limits a veterinarian to one appointment at a time.</p>
-            <div class="table-wrap data-table-card">
-              <table class="records-table">
-                <colgroup><col style="width:55%"><col style="width:7rem"><col style="width:15rem"></colgroup>
+            <div class="table-wrap data-table-card vet-capacity-wrap">
+              <table class="records-table vet-capacity-table">
+                <colgroup><col style="width:42%"><col style="width:15%"><col style="width:43%"></colgroup>
                 <thead><tr><th>Veterinarian</th><th class="col-center">Daily limit</th><th>Update</th></tr></thead>
                 <tbody>
                   <?php foreach ($veterinarians as $veterinarian): ?>
@@ -530,7 +578,7 @@ $filterRoles = ['admin', 'staff', 'vet', 'client'];
                       <td data-label="Veterinarian"><?= e($veterinarian['full_name']) ?></td>
                       <td class="col-center" data-label="Daily limit"><?= (int) $veterinarian['max_appointments_per_day'] ?></td>
                       <td data-label="Update">
-                        <form method="post" class="inline-form">
+                        <form method="post" class="capacity-form">
                           <input type="hidden" name="csrf" value="<?= e(csrf_token()) ?>">
                           <input type="hidden" name="action" value="set_vet_capacity">
                           <input type="hidden" name="vet_id" value="<?= (int) $veterinarian['vet_id'] ?>">
@@ -550,9 +598,200 @@ $filterRoles = ['admin', 'staff', 'vet', 'client'];
           </div>
         </section>
 
+        <section class="panel" id="password-recovery-requests">
+          <div class="panel-header">
+            <div class="panel-title"><h2>Password recovery requests</h2></div>
+            <span class="data-count"><?= number_format(count($passwordRequests)) ?> pending</span>
+          </div>
+          <div class="panel-body">
+            <p class="password-reset-help">Verify identity using more than the email address before approving. Temporary passwords are shared privately and are never saved in plain text.</p>
+            <div class="table-wrap data-table-card password-request-wrap">
+              <table class="records-table password-requests-table">
+                <colgroup><col style="width:21%"><col style="width:22%"><col style="width:12%"><col style="width:15%"><col style="width:30%"></colgroup>
+                <thead><tr><th>Registered email</th><th>Matched account</th><th class="col-center">Account status</th><th class="col-center">Submitted</th><th class="col-center">Review</th></tr></thead>
+                <tbody>
+                  <?php foreach ($passwordRequests as $request):
+                      $requestHasAccount = !empty($request['user_id']);
+                      $requestIsSelf = $requestHasAccount && (int) $request['user_id'] === (int) $_SESSION['user_id'];
+                      $requestAccountStatus = !$requestHasAccount
+                          ? 'Unmatched'
+                          : ($request['account_archived_at'] !== null ? 'Archived' : (string) $request['account_status']);
+                      $canApproveRequest = $requestHasAccount
+                          && $request['account_status'] === 'active'
+                          && $request['account_archived_at'] === null
+                          && !$requestIsSelf
+                          && $request['verification_result'] === 'Verified';
+                      $requestName = (string) ($request['account_name'] ?? 'No matched account');
+                      $requestRole = (string) ($request['account_role'] ?? 'Unknown');
+                      $requestEmail = (string) $request['request_email'];
+                      $verificationContact = trim((string) ($request['verification_contact'] ?? ''));
+                  ?>
+                    <tr>
+                      <td data-label="Registered email"><?= e($requestEmail) ?></td>
+                      <td data-label="Matched account">
+                        <?= $requestHasAccount
+                            ? e($requestName) . ' (' . e($roleLabel($requestRole)) . ')'
+                            : 'No matching account' ?>
+                      </td>
+                      <td class="col-center" data-label="Account status">
+                        <?php if ($requestHasAccount): ?>
+                          <span class="status <?= $request['account_archived_at'] !== null ? 'inactive' : e((string) $request['account_status']) ?>"><?= e($requestAccountStatus === 'Archived' ? 'Archived' : ucfirst((string) $request['account_status'])) ?></span>
+                        <?php else: ?>
+                          <span class="status inactive">Unmatched</span>
+                        <?php endif; ?>
+                      </td>
+                      <td class="col-center" data-label="Submitted"><?= e(date('M j, Y g:i A', strtotime((string) $request['submitted_at']))) ?></td>
+                      <td data-label="Review">
+                        <div class="password-request-actions">
+                          <button class="button request-action request-review" type="button"
+                            data-review-request
+                            data-request-id="<?= (int) $request['request_id'] ?>"
+                            data-request-email="<?= e($requestEmail) ?>"
+                            data-request-status="<?= e((string) $request['request_status']) ?>"
+                            data-submitted-at="<?= e(date('M j, Y g:i A', strtotime((string) $request['submitted_at']))) ?>"
+                            data-account-name="<?= e($requestName) ?>"
+                            data-account-email="<?= e((string) ($request['account_email'] ?? '')) ?>"
+                            data-account-role="<?= e($requestHasAccount ? $roleLabel($requestRole) : 'No matching account') ?>"
+                            data-account-status="<?= e($requestAccountStatus) ?>"
+                            data-account-created="<?= e(!empty($request['account_created_at']) ? date('M j, Y', strtotime((string) $request['account_created_at'])) : 'Not available') ?>"
+                            data-verification-contact="<?= e($verificationContact !== '' ? $verificationContact : 'No registered contact on file') ?>"
+                            data-verification-method="<?= e((string) ($request['verification_method'] ?? '')) ?>"
+                            data-verification-result="<?= e((string) $request['verification_result']) ?>"
+                            data-verification-notes="<?= e((string) ($request['verification_notes'] ?? '')) ?>"
+                            <?= $requestIsSelf ? 'disabled title="A different administrator must review this request."' : '' ?>>Review</button>
+                          <button class="button request-action request-approve" type="button"
+                            data-approve-request
+                            data-request-id="<?= (int) $request['request_id'] ?>"
+                            data-request-email="<?= e($requestEmail) ?>"
+                            data-account-name="<?= e($requestName) ?>"
+                            <?= !$canApproveRequest ? 'disabled title="' . ($requestIsSelf ? 'A different administrator must review this request.' : (!$requestHasAccount ? 'No matching account.' : ($request['account_archived_at'] !== null ? 'Archived accounts cannot receive password resets.' : ($request['account_status'] !== 'active' ? 'The account must be active.' : 'Verify identity before approval.')))) . '"' : '' ?>>Approve</button>
+                          <button class="button request-action request-reject" type="button"
+                            data-reject-request
+                            data-request-id="<?= (int) $request['request_id'] ?>"
+                            data-request-email="<?= e($requestEmail) ?>"
+                            data-account-name="<?= e($requestName) ?>"
+                            <?= $requestIsSelf ? 'disabled title="A different administrator must review this request."' : '' ?>>Reject</button>
+                        </div>
+                        <?php if (!$requestIsSelf && !$requestHasAccount): ?><span class="request-review-note">No matching account; rejection only.</span><?php endif; ?>
+                        <?php if (!$requestIsSelf && $requestHasAccount && $request['account_archived_at'] !== null): ?><span class="request-review-note">Archived accounts cannot receive password resets.</span><?php endif; ?>
+                        <?php if (!$requestIsSelf && $requestHasAccount && $request['account_archived_at'] === null && $request['account_status'] !== 'active'): ?><span class="request-review-note">Activate the account before approval.</span><?php endif; ?>
+                        <?php if (!$requestIsSelf && $requestHasAccount && $request['account_archived_at'] === null && $request['account_status'] === 'active' && $request['verification_result'] !== 'Verified'): ?><span class="request-review-note">Verification required before approval.</span><?php endif; ?>
+                      </td>
+                    </tr>
+                  <?php endforeach; ?>
+                  <?php if (!$passwordRequests): ?>
+                    <tr><td colspan="5"><div class="empty-state-box"><span>No pending requests</span><small>New password recovery requests will appear here.</small></div></td></tr>
+                  <?php endif; ?>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <dialog class="workflow-dialog" id="recovery-review-dialog" aria-labelledby="recovery-review-title">
+          <form method="post" action="password_requests.php" id="recovery-verify-form">
+            <div class="workflow-dialog-header">
+              <div><h2 id="recovery-review-title">Review and verify identity</h2><p>Email address alone is not sufficient proof of identity.</p></div>
+              <button class="dialog-close" type="button" data-close-dialog aria-label="Close dialog">&times;</button>
+            </div>
+            <div class="workflow-dialog-body">
+              <input type="hidden" name="csrf" value="<?= e(csrf_token()) ?>">
+              <input type="hidden" name="action" value="verify">
+              <input type="hidden" name="request_id" id="verify-request-id">
+              <dl class="request-details">
+                <div><dt>Registered full name</dt><dd data-review-detail="account-name"></dd></div>
+                <div><dt>Requested email</dt><dd data-review-detail="request-email"></dd></div>
+                <div><dt>Account email</dt><dd data-review-detail="account-email"></dd></div>
+                <div><dt>Account type / role</dt><dd data-review-detail="account-role"></dd></div>
+                <div><dt>Account status</dt><dd data-review-detail="account-status"></dd></div>
+                <div><dt>Account created</dt><dd data-review-detail="account-created"></dd></div>
+                <div><dt>Request submitted</dt><dd data-review-detail="submitted-at"></dd></div>
+                <div><dt>Request status</dt><dd data-review-detail="request-status"></dd></div>
+                <div class="wide-detail"><dt>Registered contact information</dt><dd data-review-detail="verification-contact"></dd></div>
+              </dl>
+              <section class="verification-section" aria-labelledby="verification-section-title">
+                <h3 id="verification-section-title">Identity verification</h3>
+                <label>Verification method
+                  <select name="verification_method" id="verification-method" required>
+                    <option value="">Choose a method</option>
+                    <option value="in_person">In-person identity verification</option>
+                    <option value="registered_contact">Previously registered contact information</option>
+                    <option value="other">Other documented method</option>
+                  </select>
+                </label>
+                <label>Verification result
+                  <select name="verification_result" id="verification-result" required>
+                    <option value="Not verified">Not verified</option>
+                    <option value="Verified">Verified</option>
+                  </select>
+                </label>
+                <label>Verification notes
+                  <textarea name="verification_notes" id="verification-notes" required minlength="10" maxlength="1000" rows="4" placeholder="Record what was checked and why the identity matched or did not match."></textarea>
+                </label>
+              </section>
+            </div>
+            <div class="workflow-dialog-actions">
+              <button class="button secondary" type="button" data-close-dialog>Cancel</button>
+              <button class="button" type="submit">Save verification</button>
+            </div>
+          </form>
+        </dialog>
+
+        <dialog class="workflow-dialog" id="recovery-approve-dialog" aria-labelledby="recovery-approve-title">
+          <form method="post" action="password_requests.php" id="recovery-approve-form">
+            <div class="workflow-dialog-header">
+              <div><h2 id="recovery-approve-title">Approve and issue temporary password</h2><p id="approval-account-summary"></p></div>
+              <button class="dialog-close" type="button" data-close-dialog aria-label="Close dialog">&times;</button>
+            </div>
+            <div class="workflow-dialog-body">
+              <input type="hidden" name="csrf" value="<?= e(csrf_token()) ?>">
+              <input type="hidden" name="action" value="approve">
+              <input type="hidden" name="request_id" id="approve-request-id">
+              <div class="approval-notice">Identity verification must already be saved. Share the temporary password privately; it will be displayed once and the user must change it at next login.</div>
+              <label>Temporary password
+                <div class="password-generate-row">
+                  <input type="password" name="temporary_password" id="temporary-password" required minlength="7" maxlength="14" autocomplete="new-password">
+                  <button class="button secondary" type="button" id="generate-temporary-password">Generate</button>
+                </div>
+              </label>
+              <label>Confirm temporary password
+                <input type="password" name="confirm_password" id="confirm-temporary-password" required minlength="7" maxlength="14" autocomplete="new-password">
+              </label>
+              <p class="password-policy"><?= e(password_policy_description()) ?></p>
+              <p class="password-generator-error" id="password-generator-error" role="alert" hidden></p>
+            </div>
+            <div class="workflow-dialog-actions">
+              <button class="button secondary" type="button" data-close-dialog>Cancel</button>
+              <button class="button request-approve" type="submit">Approve</button>
+            </div>
+          </form>
+        </dialog>
+
+        <dialog class="workflow-dialog" id="recovery-reject-dialog" aria-labelledby="recovery-reject-title">
+          <form method="post" action="password_requests.php" id="recovery-reject-form">
+            <div class="workflow-dialog-header">
+              <div><h2 id="recovery-reject-title">Reject recovery request</h2><p id="rejection-account-summary"></p></div>
+              <button class="dialog-close" type="button" data-close-dialog aria-label="Close dialog">&times;</button>
+            </div>
+            <div class="workflow-dialog-body">
+              <input type="hidden" name="csrf" value="<?= e(csrf_token()) ?>">
+              <input type="hidden" name="action" value="reject">
+              <input type="hidden" name="request_id" id="reject-request-id">
+              <label>Reason for rejection
+                <textarea name="rejection_reason" required minlength="8" maxlength="500" rows="4" placeholder="Record why this request cannot be approved."></textarea>
+              </label>
+            </div>
+            <div class="workflow-dialog-actions">
+              <button class="button secondary" type="button" data-close-dialog>Cancel</button>
+              <button class="button request-reject" type="submit">Reject</button>
+            </div>
+          </form>
+        </dialog>
+
         <section class="panel">
           <div class="panel-header"><div class="panel-title"><h2>Registered accounts</h2></div><span class="data-count" id="users-count" aria-live="polite" aria-atomic="true"><?= number_format(count($users)) ?> shown</span></div>
           <div class="panel-body">
+            <p class="password-reset-help">Verify the user's registered details before resetting. Share the temporary password privately; it is displayed once and must be changed at next login.</p>
             <div class="toolbar">
               <label>Search by name or email<input type="search" id="user-search" placeholder="Start typing a name or email…" maxlength="150" autocomplete="off"></label>
               <label class="role-filter">Filter by role<select id="role-filter"><option value="">All roles</option><?php foreach ($filterRoles as $role): ?><option value="<?= e($role) ?>"><?= e($roleLabel($role)) ?></option><?php endforeach; ?></select></label>
@@ -560,7 +799,7 @@ $filterRoles = ['admin', 'staff', 'vet', 'client'];
             </div>
             <div class="table-wrap data-table-card">
               <table class="records-table users-table">
-                <colgroup><col style="width:22%"><col style="width:28%"><col style="width:6rem"><col style="width:7rem"><col style="width:9rem"><col style="width:17rem"></colgroup>
+                <colgroup><col style="width:18%"><col style="width:24%"><col style="width:14%"><col style="width:13%"><col style="width:15%"><col style="width:16%"></colgroup>
                 <thead><tr><th>Name</th><th>Email</th><th class="col-center">Role</th><th class="col-center">Status</th><th class="col-center">Created</th><th class="col-center">Action</th></tr></thead>
                 <tbody id="users-body">
                   <?php foreach ($users as $user):
@@ -572,7 +811,10 @@ $filterRoles = ['admin', 'staff', 'vet', 'client'];
                       <td class="col-name" title="<?= e($user['full_name']) ?>" data-label="Name"><?= e($user['full_name']) ?><?= $isSelf ? ' <span class="muted">(you)</span>' : '' ?></td>
                       <td title="<?= e($user['email']) ?>" data-label="Email"><?= e($user['email']) ?></td>
                       <td class="col-center" data-label="Role"><span class="role-pill <?= e($user['role']) ?>"><?= e($roleLabel($user['role'])) ?></span></td>
-                      <td class="col-center" data-label="Status"><span class="status <?= e($user['status']) ?>"><?= e(ucfirst($user['status'])) ?></span></td>
+                      <td class="col-center" data-label="Status">
+                        <span class="status <?= e($user['status']) ?>"><?= e(ucfirst($user['status'])) ?></span>
+                        <?php if (!empty($user['must_change_password'])): ?><span class="password-change-status">Password change required</span><?php endif; ?>
+                      </td>
                       <td class="col-center" data-label="Created"><?= e(date('M j, Y', strtotime($user['created_at']))) ?></td>
                       <td class="col-center" data-label="Action">
                         <div class="account-actions">
@@ -703,7 +945,7 @@ $filterRoles = ['admin', 'staff', 'vet', 'client'];
       });
 
       function isStrong(p) {
-        return p.length >= 7 && p.length <= 72 &&
+        return p.length >= 7 && p.length <= 14 &&
                /[a-z]/.test(p) && /[A-Z]/.test(p) &&
                /[0-9]/.test(p) && /[^A-Za-z0-9]/.test(p);
       }
@@ -734,12 +976,185 @@ $filterRoles = ['admin', 'staff', 'vet', 'client'];
 
     })();
   </script>
+  <script>
+    (() => {
+      const reviewDialog = document.getElementById('recovery-review-dialog');
+      const approveDialog = document.getElementById('recovery-approve-dialog');
+      const rejectDialog = document.getElementById('recovery-reject-dialog');
+      const detailNames = ['account-name', 'request-email', 'account-email', 'account-role', 'account-status', 'account-created', 'submitted-at', 'request-status', 'verification-contact'];
+      const approveForm = document.getElementById('recovery-approve-form');
+      const temporaryPassword = document.getElementById('temporary-password');
+      const confirmTemporaryPassword = document.getElementById('confirm-temporary-password');
+
+      function openDialog(dialog) {
+        if (dialog && typeof dialog.showModal === 'function') dialog.showModal();
+      }
+
+      function fillDialogDetails(button, dialog) {
+        detailNames.forEach((name) => {
+          const value = button.getAttribute('data-' + name) || 'Not available';
+          const target = dialog.querySelector('[data-review-detail="' + name + '"]');
+          if (target) target.textContent = value;
+        });
+      }
+
+      document.querySelectorAll('[data-review-request]').forEach((button) => {
+        button.addEventListener('click', () => {
+          fillDialogDetails(button, reviewDialog);
+          document.getElementById('verify-request-id').value = button.dataset.requestId;
+          document.getElementById('verification-method').value = button.dataset.verificationMethod || '';
+          document.getElementById('verification-result').value = button.dataset.verificationResult || 'Not verified';
+          document.getElementById('verification-notes').value = button.dataset.verificationNotes || '';
+          openDialog(reviewDialog);
+        });
+      });
+
+      document.querySelectorAll('[data-approve-request]').forEach((button) => {
+        button.addEventListener('click', () => {
+          document.getElementById('approve-request-id').value = button.dataset.requestId;
+          document.getElementById('approval-account-summary').textContent =
+            (button.dataset.accountName || 'Account') + ' · ' + (button.dataset.requestEmail || '');
+          document.getElementById('temporary-password').value = '';
+          document.getElementById('confirm-temporary-password').value = '';
+          openDialog(approveDialog);
+        });
+      });
+
+      document.querySelectorAll('[data-reject-request]').forEach((button) => {
+        button.addEventListener('click', () => {
+          document.getElementById('reject-request-id').value = button.dataset.requestId;
+          document.getElementById('rejection-account-summary').textContent =
+            (button.dataset.accountName || 'Account') + ' · ' + (button.dataset.requestEmail || '');
+          document.querySelector('#recovery-reject-form textarea[name="rejection_reason"]').value = '';
+          openDialog(rejectDialog);
+        });
+      });
+
+      document.querySelectorAll('[data-close-dialog]').forEach((button) => {
+        button.addEventListener('click', () => button.closest('dialog').close());
+      });
+
+      approveForm.addEventListener('submit', (event) => {
+        confirmTemporaryPassword.setCustomValidity(
+          temporaryPassword.value === confirmTemporaryPassword.value ? '' : 'The temporary passwords do not match.'
+        );
+        if (!approveForm.checkValidity()) {
+          event.preventDefault();
+          approveForm.reportValidity();
+        }
+      });
+      confirmTemporaryPassword.addEventListener('input', () => confirmTemporaryPassword.setCustomValidity(''));
+
+      document.getElementById('generate-temporary-password').addEventListener('click', () => {
+        const error = document.getElementById('password-generator-error');
+        error.hidden = true;
+        if (!window.crypto || typeof window.crypto.getRandomValues !== 'function') {
+          error.textContent = 'Secure password generation is unavailable in this browser. Enter a password manually.';
+          error.hidden = false;
+          return;
+        }
+
+        try {
+          function randomIndex(length) {
+            const values = new Uint32Array(1);
+            const limit = Math.floor(4294967296 / length) * length;
+            do { window.crypto.getRandomValues(values); } while (values[0] >= limit);
+            return values[0] % length;
+          }
+
+          const groups = [
+            'ABCDEFGHJKLMNPQRSTUVWXYZ',
+            'abcdefghijkmnopqrstuvwxyz',
+            '23456789',
+            '!@#$%&*?'
+          ];
+          const allCharacters = groups.join('');
+          const characters = groups.map((group) => group[randomIndex(group.length)]);
+          while (characters.length < 14) characters.push(allCharacters[randomIndex(allCharacters.length)]);
+          for (let index = characters.length - 1; index > 0; index -= 1) {
+            const swap = randomIndex(index + 1);
+            [characters[index], characters[swap]] = [characters[swap], characters[index]];
+          }
+          temporaryPassword.value = characters.join('');
+          confirmTemporaryPassword.value = temporaryPassword.value;
+          confirmTemporaryPassword.setCustomValidity('');
+        } catch (generationError) {
+          error.textContent = 'The secure password generator failed. Enter a password manually.';
+          error.hidden = false;
+        }
+      });
+    })();
+  </script>
   <script src="../assets/JS/admin_notifications.js" defer></script>
   <script src="../assets/JS/admin-shell.js" defer></script>
   <style>
     .account-actions{display:grid;justify-items:center;gap:6px}
+    .notice code{margin:0 6px;padding:4px 8px;display:inline-block;color:var(--blue-900);background:#fff;border:1px solid #b8d2e5;border-radius:6px;font-size:.95rem;user-select:all}
+    .password-reset-help{margin:0 0 13px;padding:10px 12px;color:var(--muted);background:#f2f7fb;border-left:3px solid var(--blue-500);border-radius:8px;font-size:.82rem}
+    .password-change-status{margin-top:5px;padding:4px 8px;display:block;color:#805400;background:#fff2d6;border-radius:999px;font-size:.68rem;font-weight:700;white-space:normal}
+    body.role-app.admin .panel:has(.vet-capacity-wrap)>.panel-body{padding:12px 24px 18px}
+    body.role-app.admin .vet-capacity-wrap{width:100%;max-width:860px;min-height:0;margin:0;overflow-x:auto}
+    body.role-app.admin .vet-capacity-wrap>.vet-capacity-table{width:100%;min-width:0;table-layout:fixed}
+    .capacity-form{width:100%;min-width:0;display:grid;grid-template-columns:minmax(96px,1fr) auto;align-items:center;gap:8px}
+    .capacity-form input[type=number]{width:100%;min-width:0}
+    .password-requests-table{min-width:1050px}
+    body.role-app.admin .users-table{min-width:1020px}
+    .password-request-actions{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:8px}
+    .request-action{width:88px;min-height:36px;padding:6px 10px;flex:0 0 88px;border-radius:8px;font-size:.78rem}
+    .button.request-review{color:#fff;background:#1769aa;border-color:#1769aa}
+    .button.request-review:hover{background:#105487;border-color:#105487}
+    .button.request-approve{color:#fff;background:#23834f;border-color:#23834f}
+    .button.request-approve:hover{background:#17643b;border-color:#17643b}
+    .button.request-reject{color:#fff;background:#b93838;border-color:#b93838}
+    .button.request-reject:hover{background:#972b2b;border-color:#972b2b}
+    .request-action:disabled{opacity:.42;cursor:not-allowed}
+    .request-review-note{color:var(--muted);font-size:.76rem;white-space:normal}
     .inline-form input[type=number]{width:90px;min-height:34px;padding:5px 8px;border:1px solid #bed4e5;border-radius:7px}
     .inline-form{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+    .workflow-dialog{width:min(720px,calc(100vw - 28px));max-width:none;max-height:min(90dvh,820px);padding:0;overflow:hidden;color:var(--ink);background:#fff;border:1px solid #b9d6ea;border-radius:16px;box-shadow:0 24px 70px rgba(0,20,40,.3)}
+    .workflow-dialog::backdrop{background:rgba(0,30,55,.58);backdrop-filter:blur(2px)}
+    .workflow-dialog form{max-height:inherit;display:flex;flex-direction:column}
+    .workflow-dialog-header{padding:16px 20px;display:flex;align-items:flex-start;justify-content:space-between;gap:14px;color:#fff;background:linear-gradient(100deg,#015b8c,#002e4a)}
+    .workflow-dialog-header h2{margin:0;font-size:1.08rem}.workflow-dialog-header p{margin:4px 0 0;color:#e5f2fb;font-size:.8rem}
+    .dialog-close{width:34px;height:34px;flex:none;color:#fff;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.38);border-radius:8px;font-size:1.35rem;line-height:1;cursor:pointer}
+    .workflow-dialog-body{padding:18px 20px;overflow-y:auto;display:grid;gap:16px}
+    .workflow-dialog-body label{min-width:0;display:grid;gap:6px;color:var(--blue-900);font-size:.82rem;font-weight:700}
+    .workflow-dialog-body input,.workflow-dialog-body select,.workflow-dialog-body textarea{width:100%;min-width:0;min-height:40px;padding:9px 10px;color:var(--ink);background:#fff;border:1px solid #bed4e5;border-radius:8px;font:inherit}
+    .workflow-dialog-body textarea{min-height:96px;resize:vertical}
+    .workflow-dialog-body input:focus,.workflow-dialog-body select:focus,.workflow-dialog-body textarea:focus{outline:3px solid rgba(2,132,199,.16);border-color:var(--blue-500)}
+    .request-details{margin:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+    .request-details div{min-width:0;padding:10px 12px;background:#f6fafd;border:1px solid #e0edf6;border-radius:9px}
+    .request-details .wide-detail{grid-column:1/-1}
+    .request-details dt{color:var(--muted);font-size:.68rem;font-weight:700;letter-spacing:.04em;text-transform:uppercase}
+    .request-details dd{margin:3px 0 0;overflow-wrap:anywhere;color:var(--blue-900);font-size:.84rem;font-weight:600}
+    .verification-section{padding:14px;display:grid;gap:12px;background:#f7fbfe;border:1px solid #dceaf5;border-radius:12px}
+    .verification-section h3{margin:0;color:var(--blue-900);font-size:.94rem}
+    .approval-notice{padding:10px 12px;color:#315b77;background:#eef6fc;border-left:3px solid var(--blue-500);border-radius:8px;font-size:.8rem}
+    .password-generate-row{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:8px}
+    .password-generate-row .button{min-height:40px}
+    .password-policy{margin:0;color:var(--muted);font-size:.76rem}
+    .password-generator-error{margin:0;color:#a52a2a;font-size:.78rem}
+    .workflow-dialog-actions{padding:12px 20px;display:flex;justify-content:flex-end;gap:8px;background:#f7fbfe;border-top:1px solid #e0edf6}
+    .workflow-dialog-actions .button{min-width:96px}
+    .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+    @media(max-width:760px){
+      body.role-app.admin .panel:has(.vet-capacity-wrap)>.panel-body{padding:10px 12px 16px}
+      body.role-app.admin .vet-capacity-wrap{max-width:none;overflow:visible;border:0;background:transparent}
+      .vet-capacity-table{display:block}
+      .vet-capacity-table thead{position:absolute;width:1px;height:1px;padding:0;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+      .vet-capacity-table tbody{display:grid;gap:10px}
+      .vet-capacity-table tbody tr:not(.empty-row){display:grid;grid-template-columns:minmax(0,1fr) 110px;overflow:hidden;background:#fff;border:1px solid var(--grid-line);border-radius:10px}
+      .vet-capacity-table tbody td[data-label]{min-width:0;padding:10px;display:grid;gap:5px;border-right:0;white-space:normal}
+      .vet-capacity-table tbody td[data-label]::before{color:var(--muted);content:attr(data-label);font-size:.68rem;font-weight:700;letter-spacing:.04em;text-transform:uppercase}
+      .vet-capacity-table tbody td[data-label="Veterinarian"],.vet-capacity-table tbody td[data-label="Update"]{grid-column:1/-1}
+      .capacity-form{grid-template-columns:minmax(0,1fr) auto}
+      .password-request-actions{justify-content:flex-start}
+      .workflow-dialog-body{padding:14px}
+      .workflow-dialog-header,.workflow-dialog-actions{padding:12px 14px}
+      .request-details{grid-template-columns:minmax(0,1fr)}
+      .request-details .wide-detail{grid-column:auto}
+      .password-generate-row{grid-template-columns:minmax(0,1fr) auto}
+    }
   </style>
 </body>
 </html>

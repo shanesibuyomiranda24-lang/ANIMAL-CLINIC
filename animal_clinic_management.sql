@@ -1353,6 +1353,7 @@ CREATE TABLE `users` (
   `full_name` varchar(100) NOT NULL DEFAULT '',
   `email` varchar(254) NOT NULL,
   `password_hash` varchar(255) NOT NULL,
+  `must_change_password` tinyint(1) NOT NULL DEFAULT 0,
   `role` varchar(20) NOT NULL,
   `status` varchar(10) NOT NULL DEFAULT 'active',
   `owner_id` int(10) UNSIGNED DEFAULT NULL,
@@ -1360,6 +1361,26 @@ CREATE TABLE `users` (
   `vet_id` int(10) UNSIGNED DEFAULT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Table structure for table `PasswordRecoveryRequests`
+--
+
+CREATE TABLE `PasswordRecoveryRequests` (
+  `request_id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+  `request_email` varchar(254) NOT NULL,
+  `user_id` int(10) UNSIGNED DEFAULT NULL,
+  `status` varchar(10) NOT NULL DEFAULT 'Pending',
+  `submitted_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `request_ip_address` varchar(45) DEFAULT NULL,
+  `reviewed_by_user_id` int(10) UNSIGNED DEFAULT NULL,
+  `reviewed_at` datetime DEFAULT NULL,
+  PRIMARY KEY (`request_id`),
+  KEY `idx_password_recovery_status_time` (`status`,`submitted_at`),
+  KEY `idx_password_recovery_email_status` (`request_email`,`status`),
+  KEY `idx_password_recovery_ip_time` (`request_ip_address`,`submitted_at`),
+  CONSTRAINT `chk_password_recovery_status` CHECK (`status` in ('Pending','Approved','Rejected'))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
@@ -2915,6 +2936,13 @@ ALTER TABLE `users`
   ADD CONSTRAINT `fk_user_vet` FOREIGN KEY (`vet_id`) REFERENCES `veterinarians` (`vet_id`) ON DELETE SET NULL;
 
 --
+-- Constraints for table `PasswordRecoveryRequests`
+--
+ALTER TABLE `PasswordRecoveryRequests`
+  ADD CONSTRAINT `fk_password_recovery_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,
+  ADD CONSTRAINT `fk_password_recovery_reviewer` FOREIGN KEY (`reviewed_by_user_id`) REFERENCES `users` (`user_id`) ON DELETE SET NULL;
+
+--
 -- Constraints for table `vaccinations`
 --
 ALTER TABLE `vaccinations`
@@ -2966,6 +2994,24 @@ ALTER TABLE `vetschedules`
 ALTER TABLE `vetservices`
   ADD CONSTRAINT `fk_vs_service` FOREIGN KEY (`service_id`) REFERENCES `services` (`service_id`) ON DELETE CASCADE,
   ADD CONSTRAINT `fk_vs_vet` FOREIGN KEY (`vet_id`) REFERENCES `veterinarians` (`vet_id`) ON DELETE CASCADE;
+
+CREATE TABLE IF NOT EXISTS `passwordrecoveryrequests` (
+  `request_id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+  `request_email` varchar(254) NOT NULL,
+  `user_id` int(10) UNSIGNED DEFAULT NULL,
+  `status` varchar(10) NOT NULL DEFAULT 'Pending',
+  `submitted_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `request_ip_address` varchar(45) DEFAULT NULL,
+  `reviewed_by_user_id` int(10) UNSIGNED DEFAULT NULL,
+  `reviewed_at` datetime DEFAULT NULL,
+  PRIMARY KEY (`request_id`),
+  KEY `idx_password_recovery_status_time` (`status`,`submitted_at`),
+  KEY `idx_password_recovery_email_status` (`request_email`,`status`),
+  KEY `idx_password_recovery_ip_time` (`request_ip_address`,`submitted_at`),
+  CONSTRAINT `chk_password_recovery_status` CHECK (`status` IN ('Pending','Approved','Rejected')),
+  CONSTRAINT `fk_password_recovery_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_password_recovery_reviewer` FOREIGN KEY (`reviewed_by_user_id`) REFERENCES `users` (`user_id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 COMMIT;
 
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;

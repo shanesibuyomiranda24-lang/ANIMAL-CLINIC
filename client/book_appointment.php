@@ -92,7 +92,7 @@ function booking_owner_appointments(PDO $pdo, ?int $ownerId, string $from, strin
         "SELECT a.appointment_date, a.duration_minutes
          FROM Appointments a
          JOIN Pets p ON p.pet_id = a.pet_id
-         WHERE p.owner_id = ?
+         WHERE p.owner_id = ? AND p.archived_at IS NULL AND a.archived_at IS NULL
            AND a.appointment_date < DATE_ADD(?, INTERVAL 1 DAY)
            AND DATE_ADD(a.appointment_date, INTERVAL a.duration_minutes MINUTE) > ?
            AND a.status IN ($statusPlaceholders)
@@ -132,7 +132,7 @@ function booking_cross_category_pet_appointments(PDO $pdo, ?int $petId, string $
     $statement = $pdo->prepare(
         "SELECT a.appointment_date
          FROM Appointments a
-         WHERE a.pet_id = ?
+         WHERE a.pet_id = ? AND a.archived_at IS NULL
            AND a.appointment_date < DATE_ADD(?, INTERVAL 1 DAY)
            AND DATE_ADD(a.appointment_date, INTERVAL a.duration_minutes MINUTE) > ?
            AND a.status IN ($statusPlaceholders)
@@ -445,6 +445,7 @@ function booking_cross_category_pet_appointments(PDO $pdo, ?int $petId, string $
              WHERE vet_id IN ($in)
                AND appointment_date < DATE_ADD(?, INTERVAL 1 DAY)
                AND DATE_ADD(appointment_date, INTERVAL duration_minutes MINUTE) > ?
+               AND archived_at IS NULL
                AND status IN (" . implode(',', array_fill(0, count($availabilityStatuses), '?')) . ")
              ORDER BY appointment_date"
         );
@@ -692,7 +693,7 @@ if ($jsonRoute) {
         if ($petIdInput === false) {
           throw new DomainException('Choose a pet before checking appointment availability.');
         }
-        $petStatement = $pdo->prepare('SELECT pet_id FROM Pets WHERE pet_id = ? AND owner_id = ?');
+        $petStatement = $pdo->prepare('SELECT pet_id FROM Pets WHERE pet_id = ? AND owner_id = ? AND archived_at IS NULL');
         $petStatement->execute([(int) $petIdInput, (int) $c['ownerId']]);
         $petId = (int) $petStatement->fetchColumn();
         if (!$petId) {
@@ -835,7 +836,7 @@ if (!$c['dbError'] && ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && posted
             $lockOwner = $pdo->prepare('SELECT owner_id FROM PetOwners WHERE owner_id = ? FOR UPDATE');
             $lockOwner->execute([(int) $c['ownerId']]);
 
-            $petCheck = $pdo->prepare('SELECT pet_id FROM Pets WHERE pet_id = ? AND owner_id = ? FOR UPDATE');
+            $petCheck = $pdo->prepare('SELECT pet_id FROM Pets WHERE pet_id = ? AND owner_id = ? AND archived_at IS NULL FOR UPDATE');
             $petCheck->execute([(int) $petIdInput, (int) $c['ownerId']]);
             $petId = (int) $petCheck->fetchColumn();
             if (!$petId) {
@@ -990,7 +991,7 @@ if (!$c['dbError'] && ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && posted
 
 $pets = $c['dbError'] ? [] : qall(
     $pdo,
-    'SELECT pet_id, owner_id, pet_name, species, breed, birth_date, gender, photo_updated_at FROM Pets WHERE owner_id = ? ORDER BY pet_name',
+    'SELECT pet_id, owner_id, pet_name, species, breed, birth_date, gender, photo_updated_at FROM Pets WHERE owner_id = ? AND archived_at IS NULL ORDER BY pet_name',
     [$c['ownerId']]
 );
 $services = $c['dbError'] ? [] : qall(

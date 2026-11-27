@@ -28,7 +28,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                     'SELECT a.status, a.vet_id, p.owner_id, p.pet_name
                      FROM Appointments a
                      JOIN Pets p ON p.pet_id = a.pet_id
-                     WHERE a.appointment_id = ? FOR UPDATE'
+                     WHERE a.appointment_id = ? AND a.archived_at IS NULL AND p.archived_at IS NULL FOR UPDATE'
                 );
                 $before->execute([(int) $appointmentId]);
                 $current = $before->fetch();
@@ -183,7 +183,7 @@ role_render('staff', ['queue'], 'Patient Queue', 'Manage arrivals and consultati
          FROM Appointments a
          JOIN Pets p ON p.pet_id = a.pet_id
          LEFT JOIN Veterinarians v ON v.vet_id = a.vet_id
-         WHERE $where
+         WHERE a.archived_at IS NULL AND p.archived_at IS NULL AND $where
          ORDER BY CASE a.status
                     WHEN 'Check-in' THEN 0
                     WHEN 'Waiting' THEN 1

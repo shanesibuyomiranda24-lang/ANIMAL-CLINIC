@@ -53,4 +53,27 @@ appointments to be completed without a medical record. Veterinary appointments
 still require a finalized medical record before completion. Fresh imports
 already include the `picked_up_at` appointment column and updated trigger.
 
-PHP database settings are in `includes/amc_db.php`.
+Run `migrations/011_temporary_password_reset.sql` once on an existing
+installation to add the `must_change_password` flag used by administrator-issued
+temporary passwords. It defaults to `0`, so existing accounts and records are
+preserved. Fresh imports already include the column.
+
+Run `migrations/012_password_recovery_requests.sql` once on an existing
+installation to create the password recovery request queue. Requests store the
+submitted email and review status, but never a plain-text password. Fresh
+imports already include the table.
+
+Run `migrations/013_recovery_verification_and_record_archiving.sql` once on an
+existing installation, after migration 012. It adds identity-verification and
+decision-history fields to recovery requests, plus archive/restore metadata for
+accounts, pets, and appointments. This migration is additive and does not
+delete or recreate records. Do not run it on a fresh import, which already
+contains these fields.
+
+After migration 013, administrators can archive accounts, pets, and only
+completed, cancelled, or rejected appointments. Pet profiles with active
+appointments cannot be archived. Restoring a record does not change its account
+status or delete any linked medical, vaccination, payment, or appointment
+history. Sensitive actions are recorded in `ActivityLog`.
+
+PHP database settings are in `includes/database.php`.

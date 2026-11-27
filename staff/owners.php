@@ -26,7 +26,7 @@ role_render('staff', ['owners'], 'Clients & Pets', 'Manage pet owners and their 
     $rows = $pdo->query(
         'SELECT o.*, COUNT(p.pet_id) AS pet_count
          FROM PetOwners o
-         LEFT JOIN Pets p ON p.owner_id = o.owner_id
+         LEFT JOIN Pets p ON p.owner_id = o.owner_id AND p.archived_at IS NULL
          GROUP BY o.owner_id
          ORDER BY o.full_name'
     )->fetchAll();

@@ -20,6 +20,9 @@ function auth_session_context(): string
 {
     // Role routes choose their own cookie; shared endpoints pass the context explicitly.
     $scriptDirectory = basename(dirname($_SERVER['SCRIPT_NAME'] ?? ''));
+    if ($scriptDirectory === 'groomer') {
+        return 'staff';
+    }
     if (in_array($scriptDirectory, auth_session_roles(), true)) {
         return $scriptDirectory;
     }
@@ -173,7 +176,7 @@ function home_for_role(?string $role): string
 function app_path(string $path): string
 {
     $directory = basename(dirname($_SERVER['SCRIPT_NAME'] ?? ''));
-    $prefix = in_array($directory, ['admin', 'staff', 'vet', 'client'], true) ? '../' : '';
+    $prefix = in_array($directory, ['admin', 'staff', 'vet', 'client', 'groomer'], true) ? '../' : '';
     return $prefix . ltrim($path, '/');
 }
 
@@ -195,7 +198,7 @@ function destroy_auth_session(): void
 }
 
 /** Put at the top of any page that needs a logged-in user. */
-function require_login(): void
+function require_login(bool $allowForcedPasswordChange = false): void
 {
     if (!is_logged_in()) {
         header('Location: ' . app_path('login.php'));
@@ -204,7 +207,7 @@ function require_login(): void
 
     require_once __DIR__ . '/database.php';
     try {
-        $st = db()->prepare('SELECT full_name, email, `role`, status FROM users WHERE user_id = ? LIMIT 1');
+        $st = db()->prepare('SELECT full_name, email, `role`, status, must_change_password, archived_at FROM users WHERE user_id = ? LIMIT 1');
         $st->execute([$_SESSION['user_id']]);
         $user = $st->fetch();
     } catch (PDOException $exception) {
@@ -215,7 +218,7 @@ function require_login(): void
     }
 
     $role = $user ? auth_normalize_role($user['role'] ?? null) : null;
-    if (!$user || $user['status'] !== 'active' || $role === null) {
+    if (!$user || $user['status'] !== 'active' || $user['archived_at'] !== null || $role === null) {
         destroy_auth_session();
         header('Location: ' . app_path('login.php?msg=account_unavailable'));
         exit;
@@ -224,6 +227,12 @@ function require_login(): void
     $_SESSION['full_name'] = $user['full_name'];
     $_SESSION['email'] = $user['email'];
     $_SESSION['role'] = $role;
+    $_SESSION['must_change_password'] = (int) $user['must_change_password'] === 1;
+
+    if (!$allowForcedPasswordChange && $_SESSION['must_change_password']) {
+        header('Location: ' . app_path('change_password.php?session_context=' . rawurlencode($role)));
+        exit;
+    }
 }
 
 /** Put at the top of pages limited to certain roles, e.g. require_role(['admin','staff']). */

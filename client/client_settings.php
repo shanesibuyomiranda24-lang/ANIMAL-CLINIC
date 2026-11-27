@@ -1,6 +1,7 @@
 <?php
 // client/client_settings.php - profile details and password
 require_once __DIR__ . '/client_layout.php';
+require_once __DIR__ . '/../includes/passwords.php';
 $c = client_boot();
 $pdo = $c['pdo'];
 $errors = ['profile' => '', 'password' => ''];
@@ -59,8 +60,8 @@ if (!$c['dbError'] && ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
             $errors['password'] = 'Your session expired. Please try again.';
         } elseif (!password_verify($cur, (string) $userRow[$pwKey])) {
             $errors['password'] = 'Your current password is not correct.';
-        } elseif (strlen($new) < 8 || !preg_match('/[A-Z]/', $new) || !preg_match('/[a-z]/', $new) || !preg_match('/\d/', $new)) {
-            $errors['password'] = 'Use at least 8 characters with an uppercase letter, a lowercase letter and a number.';
+        } elseif (($passwordError = password_policy_error($new)) !== '') {
+            $errors['password'] = $passwordError;
         } elseif ($new !== $conf) {
             $errors['password'] = 'The new passwords do not match.';
         } else {
@@ -108,10 +109,10 @@ client_header($c, 'Settings', 'Your contact details and password', 'settings');
               <input type="hidden" name="csrf" value="<?= e(csrf_token()) ?>"><input type="hidden" name="action" value="password">
               <div class="form-grid">
                 <label class="field full">Current password<input type="password" name="current" required autocomplete="current-password"></label>
-                <label class="field">New password<input type="password" name="new" required minlength="8" autocomplete="new-password"></label>
-                <label class="field">Confirm new password<input type="password" name="confirm" required minlength="8" autocomplete="new-password"></label>
+                <label class="field">New password<input type="password" name="new" required minlength="7" maxlength="14" autocomplete="new-password"></label>
+                <label class="field">Confirm new password<input type="password" name="confirm" required minlength="7" maxlength="14" autocomplete="new-password"></label>
               </div>
-              <div class="settings-note"><span class="settings-note-icon" aria-hidden="true">i</span><p>Use at least 8 characters, including an uppercase letter, a lowercase letter, and a number.</p></div>
+              <div class="settings-note"><span class="settings-note-icon" aria-hidden="true">i</span><p><?= e(password_policy_description()) ?></p></div>
               <div class="settings-action"><span class="hint">You’ll use the new password the next time you sign in.</span><button class="button" type="submit">Update password</button></div>
             </form>
           </section>

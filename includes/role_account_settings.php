@@ -1,15 +1,6 @@
 <?php
 require_once __DIR__ . '/role_layout.php';
-
-function role_account_settings_password_is_strong(string $password): bool
-{
-    return strlen($password) >= 7
-        && strlen($password) <= 72
-        && preg_match('/[a-z]/', $password)
-        && preg_match('/[A-Z]/', $password)
-        && preg_match('/[0-9]/', $password)
-        && preg_match('/[^A-Za-z0-9]/', $password);
-}
+require_once __DIR__ . '/passwords.php';
 
 function role_account_settings(string $role): void
 {
@@ -134,8 +125,8 @@ function role_account_settings(string $role): void
 
             if (!is_string($currentHash) || !password_verify($currentPassword, $currentHash)) {
                 $error = 'The current password is incorrect.';
-            } elseif (!role_account_settings_password_is_strong($newPassword)) {
-                $error = 'Use 7–72 characters with uppercase, lowercase, a number, and a symbol.';
+            } elseif (($passwordError = password_policy_error($newPassword)) !== '') {
+                $error = $passwordError;
             } elseif ($newPassword !== $confirmPassword) {
                 $error = 'The new password and confirmation do not match.';
             } elseif (password_verify($newPassword, $currentHash)) {
@@ -242,7 +233,7 @@ function role_account_settings(string $role): void
               <section class="panel role-settings-panel">
                 <header class="role-settings-header"><h2>Change Password</h2></header>
                 <div class="role-settings-body">
-                  <p class="role-settings-note">For security, enter your current password. Use 7–72 characters with uppercase, lowercase, a number, and a symbol.</p>
+                  <p class="role-settings-note">For security, enter your current password. <?= e(password_policy_description()) ?></p>
                   <form method="post" class="role-settings-form" id="role-settings-password-form" autocomplete="off">
                     <input type="hidden" name="csrf" value="<?= e(csrf_token()) ?>">
                     <input type="hidden" name="action" value="change_password">
@@ -257,18 +248,18 @@ function role_account_settings(string $role): void
                     </label>
                     <label>New password
                       <span class="role-settings-password-field">
-                        <input type="password" name="new_password" id="role-settings-new-password" required minlength="7" maxlength="72" autocomplete="new-password">
+                        <input type="password" name="new_password" id="role-settings-new-password" required minlength="7" maxlength="14" autocomplete="new-password">
                         <button class="role-settings-password-toggle" type="button" aria-label="Show password" aria-pressed="false">
                           <svg class="eye-on" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>
                           <svg class="eye-off" viewBox="0 0 24 24" aria-hidden="true"><path d="m3 3 18 18M10.6 5.2A10.7 10.7 0 0 1 12 5c6.5 0 10 7 10 7a15.7 15.7 0 0 1-3.1 3.9M6.2 6.2C3.5 8 2 12 2 12s3.5 7 10 7c1.4 0 2.7-.3 3.8-.8"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>
                         </button>
                       </span>
                       <span class="role-settings-strength" aria-hidden="true"><span id="role-settings-strength-bar"></span></span>
-                      <span class="role-settings-hint" id="role-settings-strength-hint" aria-live="polite">Use 7+ characters with uppercase, lowercase, a number, and a symbol.</span>
+                      <span class="role-settings-hint" id="role-settings-strength-hint" aria-live="polite"><?= e(password_policy_description()) ?></span>
                     </label>
                     <label>Confirm new password
                       <span class="role-settings-password-field">
-                        <input type="password" name="confirm_password" id="role-settings-confirm-password" required minlength="7" maxlength="72" autocomplete="new-password">
+                        <input type="password" name="confirm_password" id="role-settings-confirm-password" required minlength="7" maxlength="14" autocomplete="new-password">
                         <button class="role-settings-password-toggle" type="button" aria-label="Show password" aria-pressed="false">
                           <svg class="eye-on" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>
                           <svg class="eye-off" viewBox="0 0 24 24" aria-hidden="true"><path d="m3 3 18 18M10.6 5.2A10.7 10.7 0 0 1 12 5c6.5 0 10 7 10 7a15.7 15.7 0 0 1-3.1 3.9M6.2 6.2C3.5 8 2 12 2 12s3.5 7 10 7c1.4 0 2.7-.3 3.8-.8"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>
@@ -302,11 +293,11 @@ function role_account_settings(string $role): void
                 const strengthHint = document.getElementById('role-settings-strength-hint');
                 const matchHint = document.getElementById('role-settings-match-hint');
                 const rules = [
-                  { test: function (value) { return value.length >= 7 && value.length <= 72; }, label: '7–72 characters' },
+                  { test: function (value) { return value.length >= 7 && value.length <= 14; }, label: '7–14 characters' },
                   { test: function (value) { return /[a-z]/.test(value); }, label: 'lowercase letter' },
                   { test: function (value) { return /[A-Z]/.test(value); }, label: 'uppercase letter' },
                   { test: function (value) { return /[0-9]/.test(value); }, label: 'number' },
-                  { test: function (value) { return /[^A-Za-z0-9]/.test(value); }, label: 'symbol' }
+                  { test: function (value) { return /[^A-Za-z0-9]/.test(value); }, label: 'special character' }
                 ];
 
                 function updatePasswordHints() {
@@ -316,7 +307,7 @@ function role_account_settings(string $role): void
                   const labels = ['Too weak', 'Weak', 'Fair', 'Good', 'Strong', 'Strong'];
                   bar.style.width = (score * 20) + '%';
                   bar.style.background = colors[score];
-                  strengthHint.textContent = value ? labels[score] : 'Use 7+ characters with uppercase, lowercase, a number, and a symbol.';
+                  strengthHint.textContent = value ? labels[score] : 'Use 7–14 characters with an uppercase letter, a lowercase letter, a number, and a special character.';
                   if (confirmation.value === '') {
                     matchHint.textContent = '';
                   } else {

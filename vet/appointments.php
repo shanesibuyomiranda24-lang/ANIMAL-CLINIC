@@ -20,7 +20,7 @@ role_render('vet', ['appointments'], 'My Appointments', 'Appointments assigned t
          FROM Appointments a
          JOIN Pets p ON p.pet_id = a.pet_id
          JOIN PetOwners o ON o.owner_id = p.owner_id
-         WHERE a.vet_id = ?
+         WHERE a.vet_id = ? AND a.archived_at IS NULL AND p.archived_at IS NULL
          ORDER BY (a.appointment_date >= CURRENT_DATE) DESC,
                   CASE WHEN a.appointment_date >= CURRENT_DATE THEN a.appointment_date END ASC,
                   a.appointment_date DESC"

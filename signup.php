@@ -4,6 +4,7 @@
 // when the client lands on client_dashboard.php.
 require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/includes/database.php';
+require_once __DIR__ . '/includes/passwords.php';
 require_once __DIR__ . '/includes/notifications.php';
 require_once __DIR__ . '/includes/audit_log.php';
 
@@ -13,29 +14,6 @@ header('Pragma: no-cache');
 if (is_logged_in()) {
     header('Location: ' . home_for_role(current_role()));
     exit;
-}
-
-// Returns an error message if the password is weak, or '' if it is strong.
-function password_problem(string $password): string {
-    if (strlen($password) < 8) {
-        return 'Weak password: it must be at least 8 characters.';
-    }
-    if (strlen($password) > 72) {
-        return 'Password is too long (maximum 72 characters).';
-    }
-    if (!preg_match('/[a-z]/', $password)) {
-        return 'Weak password: add at least one lowercase letter.';
-    }
-    if (!preg_match('/[A-Z]/', $password)) {
-        return 'Weak password: add at least one uppercase letter.';
-    }
-    if (!preg_match('/[0-9]/', $password)) {
-        return 'Weak password: add at least one number.';
-    }
-    if (!preg_match('/[^A-Za-z0-9]/', $password)) {
-        return 'Weak password: add at least one special character (e.g. ! @ # $ %).';
-    }
-    return '';
 }
 
 $error = '';
@@ -51,7 +29,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
         $error = 'Your session expired. Please try again.';
     } elseif (!valid_email($email)) {
         $error = 'Enter a valid email address.';
-    } elseif (($problem = password_problem($password)) !== '') {
+    } elseif (($problem = password_policy_error($password)) !== '') {
         $error = $problem;
         $passwordError = $problem;
     } elseif ($password !== $confirm) {
@@ -499,7 +477,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
           <svg class="field-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
             <path d="M17 8h-1V6a4 4 0 0 0-8 0v2H7a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V10a2 2 0 0 0-2-2ZM10 6a2 2 0 1 1 4 0v2h-4V6Zm3 9.7V18h-2v-2.3a2 2 0 1 1 2 0Z"/>
           </svg>
-          <input type="password" id="password" name="password" placeholder="Password" aria-label="Password" required maxlength="72" autocomplete="new-password"<?= $passwordError ? ' class="invalid"' : '' ?>>
+          <input type="password" id="password" name="password" placeholder="Password" aria-label="Password" required minlength="7" maxlength="14" autocomplete="new-password"<?= $passwordError ? ' class="invalid"' : '' ?>>
           <span class="pw-tip<?= $passwordError ? ' show' : '' ?>" id="pwTip" role="alert">
             <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
               <path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm1 15h-2v-2h2v2Zm0-4h-2V7h2v6Z"/>
@@ -511,7 +489,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
           <svg class="field-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
             <path d="M17 8h-1V6a4 4 0 0 0-8 0v2H7a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V10a2 2 0 0 0-2-2ZM10 6a2 2 0 1 1 4 0v2h-4V6Zm3 9.7V18h-2v-2.3a2 2 0 1 1 2 0Z"/>
           </svg>
-          <input type="password" name="confirm" placeholder="Confirm password" aria-label="Confirm password" required minlength="8" maxlength="72" autocomplete="new-password">
+          <input type="password" name="confirm" placeholder="Confirm password" aria-label="Confirm password" required minlength="7" maxlength="14" autocomplete="new-password">
         </label>
         <button class="button" type="submit">Sign up</button>
       </form>
@@ -530,7 +508,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
       var back = document.getElementById('signupBack');
 
       function isStrong(p) {
-        return p.length >= 8 &&
+        return p.length >= 7 && p.length <= 14 &&
                /[a-z]/.test(p) &&
                /[A-Z]/.test(p) &&
                /[0-9]/.test(p) &&
@@ -538,12 +516,12 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
       }
 
       function passwordMessage(p) {
-        if (p.length < 8) return 'Weak password';
-        if (p.length > 72) return 'Password is too long (maximum 72 characters).';
-        if (!/[a-z]/.test(p)) return 'Weak password: add at least one lowercase letter.';
-        if (!/[A-Z]/.test(p)) return 'Weak password: add at least one uppercase letter.';
-        if (!/[0-9]/.test(p)) return 'Weak password: add at least one number.';
-        if (!/[^A-Za-z0-9]/.test(p)) return 'Weak password: add at least one special character (e.g. ! @ # $ %).';
+        if (p.length < 7) return 'Password must be at least 7 characters.';
+        if (p.length > 14) return 'Password must not exceed 14 characters.';
+        if (!/[a-z]/.test(p)) return 'Password must include a lowercase letter.';
+        if (!/[A-Z]/.test(p)) return 'Password must include an uppercase letter.';
+        if (!/[0-9]/.test(p)) return 'Password must include a number.';
+        if (!/[^A-Za-z0-9]/.test(p)) return 'Password must include a special character.';
         return 'Weak password';
       }
 

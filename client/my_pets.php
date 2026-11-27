@@ -1,6 +1,7 @@
 <?php
 // client/my_pets.php - list, add and edit the owner's pets
 require_once __DIR__ . '/client_layout.php';
+require_once __DIR__ . '/../includes/audit_log.php';
 $c = client_boot();
 $pdo = $c['pdo'];
 $error = '';
@@ -9,34 +10,51 @@ $returnToBooking = (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST'
     ? posted_string('return_to')
     : (string) ($_GET['return_to'] ?? '')) === 'booking';
 
-if (!$c['dbError'] && ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && posted_string('action') === 'delete_pet') {
+if (!$c['dbError'] && ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && posted_string('action') === 'archive_pet') {
     $petId = filter_var(posted_string('pet_id'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
     if (!csrf_valid(posted_string('csrf'))) {
         $error = 'Your session expired. Please try again.';
     } elseif ($petId === false) {
-        $error = 'Choose a valid pet profile to delete.';
+        $error = 'Choose a valid pet profile to archive.';
     } else {
         try {
             $pdo->beginTransaction();
-            $petCheck = $pdo->prepare('SELECT pet_id FROM Pets WHERE pet_id = ? AND owner_id = ? FOR UPDATE');
+            $petCheck = $pdo->prepare('SELECT pet_id, archived_at FROM Pets WHERE pet_id = ? AND owner_id = ? FOR UPDATE');
             $petCheck->execute([(int) $petId, (int) $c['ownerId']]);
-            if (!$petCheck->fetchColumn()) {
+            $pet = $petCheck->fetch();
+            if (!$pet || $pet['archived_at'] !== null) {
                 throw new InvalidArgumentException('That pet could not be found in your account.');
             }
 
-            $historyCheck = $pdo->prepare(
-                'SELECT EXISTS(SELECT 1 FROM Appointments WHERE pet_id = ?)
-                     OR EXISTS(SELECT 1 FROM Vaccinations WHERE pet_id = ?)'
+            $activeAppointmentCheck = $pdo->prepare(
+                "SELECT appointment_id FROM Appointments
+                 WHERE pet_id = ? AND archived_at IS NULL
+                   AND (
+                       status NOT IN ('Complete','Cancelled','Rejected')
+                       OR (pickup_ready_at IS NOT NULL AND picked_up_at IS NULL)
+                   )
+                 FOR UPDATE"
             );
-            $historyCheck->execute([(int) $petId, (int) $petId]);
-            if ((int) $historyCheck->fetchColumn() === 1) {
-                throw new InvalidArgumentException('This pet has medical or appointment history and can’t be deleted. You can still edit the profile.');
+            $activeAppointmentCheck->execute([(int) $petId]);
+            if ($activeAppointmentCheck->fetchColumn()) {
+                throw new InvalidArgumentException('This pet has an active appointment. Resolve or cancel it before archiving the profile.');
             }
 
-            $pdo->prepare('DELETE FROM Pets WHERE pet_id = ? AND owner_id = ?')
-                ->execute([(int) $petId, (int) $c['ownerId']]);
+            $pdo->prepare(
+                'UPDATE Pets SET archived_at = NOW(), archived_by_user_id = ?,
+                    restored_at = NULL, restored_by_user_id = NULL
+                 WHERE pet_id = ? AND owner_id = ? AND archived_at IS NULL'
+            )->execute([(int) $_SESSION['user_id'], (int) $petId, (int) $c['ownerId']]);
+            audit_log_record(
+                $pdo,
+                (int) $_SESSION['user_id'],
+                'pet.archived',
+                'pet',
+                (int) $petId,
+                'Pet owner archived pet profile'
+            );
             $pdo->commit();
-            header('Location: my_pets.php?ok=petdeleted');
+            header('Location: my_pets.php?ok=petarchived');
             exit;
         } catch (InvalidArgumentException $ex) {
             if ($pdo->inTransaction()) {
@@ -48,17 +66,17 @@ if (!$c['dbError'] && ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && posted
                 $pdo->rollBack();
             }
             if ($ex->getCode() === '23000') {
-                $error = 'This pet has linked medical records and can’t be deleted.';
+                $error = 'The pet profile could not be archived because a related record is being updated.';
             } else {
-                error_log('delete pet: ' . $ex->getMessage());
-                $error = 'The pet could not be deleted. Please try again.';
+                error_log('archive pet: ' . $ex->getMessage());
+                $error = 'The pet profile could not be archived. Please try again.';
             }
         } catch (Throwable $ex) {
             if ($pdo->inTransaction()) {
                 $pdo->rollBack();
             }
-            error_log('delete pet: ' . $ex->getMessage());
-            $error = 'The pet could not be deleted. Please try again.';
+            error_log('archive pet: ' . $ex->getMessage());
+            $error = 'The pet profile could not be archived. Please try again.';
         }
     }
 }
@@ -86,7 +104,7 @@ if (!$c['dbError'] && ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && posted
             $photo = pet_photo_read_upload($_FILES['pet_photo'] ?? []);
             $pdo->beginTransaction();
             if ($petId > 0) {
-                $current = $pdo->prepare('SELECT pet_id FROM Pets WHERE pet_id = ? AND owner_id = ? FOR UPDATE');
+                $current = $pdo->prepare('SELECT pet_id FROM Pets WHERE pet_id = ? AND owner_id = ? AND archived_at IS NULL FOR UPDATE');
                 $current->execute([$petId, $c['ownerId']]);
                 $existing = $current->fetch();
                 if (!$existing) {
@@ -130,11 +148,8 @@ if (!$c['dbError'] && ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && posted
 
 $pets = $c['dbError'] ? [] : qall(
     $pdo,
-    'SELECT p.pet_id, p.owner_id, p.pet_name, p.species, p.breed, p.birth_date, p.gender, p.photo_updated_at,
-            CASE WHEN EXISTS (SELECT 1 FROM Appointments a WHERE a.pet_id = p.pet_id)
-                       OR EXISTS (SELECT 1 FROM Vaccinations v WHERE v.pet_id = p.pet_id)
-                 THEN 0 ELSE 1 END AS can_delete
-     FROM Pets p WHERE p.owner_id = ? ORDER BY p.pet_name',
+    'SELECT p.pet_id, p.owner_id, p.pet_name, p.species, p.breed, p.birth_date, p.gender, p.photo_updated_at
+     FROM Pets p WHERE p.owner_id = ? AND p.archived_at IS NULL ORDER BY p.pet_name',
     [$c['ownerId']]
 );
 $oldPetPhoto = '';
@@ -147,7 +162,7 @@ foreach ($pets as $pet) {
 client_header($c, 'My Pets', 'Pets registered under your account', 'pets');
 ?>
         <?php if ($error): ?><div class="notice error" role="alert"><?= e($error) ?></div><?php endif; ?>
-        <?php if (($_GET['ok'] ?? '') === 'petdeleted'): ?><div class="notice ok" role="status">Pet profile deleted.</div><?php endif; ?>
+        <?php if (($_GET['ok'] ?? '') === 'petarchived'): ?><div class="notice ok" role="status">Pet profile archived. Its appointment and medical history remains preserved.</div><?php endif; ?>
         <section class="panel">
           <div class="panel-header"><h2>Your pets</h2><span class="data-count"><?= count($pets) ?> pet<?= count($pets) === 1 ? '' : 's' ?></span></div>
           <div class="panel-body">
@@ -174,10 +189,8 @@ client_header($c, 'My Pets', 'Pets registered under your account', 'pets');
                       data-id="<?= (int) $p['pet_id'] ?>" data-name="<?= e($p['pet_name']) ?>" data-species="<?= e($p['species'] ?? '') ?>"
                       data-breed="<?= e($p['breed'] ?? '') ?>" data-gender="<?= e($p['gender'] ?? '') ?>" data-birth="<?= e($p['birth_date'] ?? '') ?>" data-photo="<?= e($photoUrl) ?>">Edit</button>
                     <button class="button danger small delete-pet" type="button"
-                      data-id="<?= (int) $p['pet_id'] ?>" data-name="<?= e($p['pet_name']) ?>"
-                      <?= empty($p['can_delete']) ? 'disabled title="Profiles with medical or appointment history are protected."' : '' ?>>Delete</button>
+                      data-id="<?= (int) $p['pet_id'] ?>" data-name="<?= e($p['pet_name']) ?>">Archive</button>
                   </div>
-                  <?php if (empty($p['can_delete'])): ?><p class="pet-delete-note">Medical and appointment history is protected from deletion.</p><?php endif; ?>
                 </article>
               <?php endforeach; ?>
             </div>
@@ -222,17 +235,17 @@ client_header($c, 'My Pets', 'Pets registered under your account', 'pets');
           </form>
         </dialog>
         <dialog id="delete-dialog" aria-labelledby="delete-title">
-          <div class="panel-header" style="border-radius:0"><h2 id="delete-title">Delete pet profile</h2></div>
+          <div class="panel-header" style="border-radius:0"><h2 id="delete-title">Archive pet profile</h2></div>
           <form class="dlg-form" id="delete-form" method="post" action="my_pets.php">
             <input type="hidden" name="csrf" value="<?= e(csrf_token()) ?>">
-            <input type="hidden" name="action" value="delete_pet">
+            <input type="hidden" name="action" value="archive_pet">
             <input type="hidden" name="pet_id" id="delete-pet-id">
             <div class="delete-dialog-content">
-              <p>Delete <strong id="delete-pet-name"></strong>’s profile? This cannot be undone.</p>
-              <p>Profiles with appointment or vaccination history are protected and can’t be deleted.</p>
+              <p>Archive <strong id="delete-pet-name"></strong>’s profile? It will be hidden from active pet lists, but the clinic administrator can restore it.</p>
+              <p>Medical, vaccination, payment, and appointment history will remain saved. Active appointments must be resolved first.</p>
               <div class="delete-dialog-actions">
                 <button class="button secondary" type="button" id="delete-cancel">Keep profile</button>
-                <button class="button danger" type="submit">Delete profile</button>
+                <button class="button danger" type="submit">Archive profile</button>
               </div>
             </div>
           </form>

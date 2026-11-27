@@ -72,8 +72,8 @@ function role_nav_icon(string $key, string $role = ''): string
             'dashboard' => '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10.8 12 3l9 7.8v9a1.2 1.2 0 0 1-1.2 1.2h-5.3v-6.2h-5V21H4.2A1.2 1.2 0 0 1 3 19.8z"/></svg>',
             'owners' => '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 20v-1.6a3.4 3.4 0 0 0-3.4-3.4H5.4A3.4 3.4 0 0 0 2 18.4V20m7.5-9a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm12.5 9v-1.6a3.4 3.4 0 0 0-2.6-3.3M16.2 3.1a4 4 0 0 1 0 7.7"/></svg>',
             'appointments' => '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4m10-4v4M3 10h18M7 14h3m-3 3h3m4-3h3"/></svg>',
-            'schedules' => '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2M4.5 4.5l2 2M19.5 4.5l-2 2"/></svg>',
-            'groomer_schedules' => '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2M4.5 4.5l2 2M19.5 4.5l-2 2"/></svg>',
+            'schedules' => '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4m10-4v4M3 10h18"/><circle cx="16" cy="16" r="3"/><path d="M16 14.5V16l1 1"/></svg>',
+            'groomer_schedules' => '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14 6 4 4M4 20l8.5-8.5M7 17l-3-3m13-3 3-3a2.1 2.1 0 0 0-3-3l-3 3m-6 6 3 3"/><circle cx="6" cy="6" r="2"/><circle cx="18" cy="18" r="2"/></svg>',
             'services' => '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 9 5-9 5-9-5zm-9 9 9 5 9-5m-18 5 9 5 9-5M12 12v9"/></svg>',
             'medical' => '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V11h4v9zm6 0V5h4v15zm6 0V8h4v12z"/></svg>',
             'settings' => '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7z"/><path d="m19.4 15 .1.1 1.1 1.7-1.8 3.1-2-.5a8 8 0 0 1-1.5.9l-.4 2h-3.6l-.4-2a8 8 0 0 1-1.5-.9l-2 .5-1.8-3.1 1.1-1.7a7 7 0 0 1 0-1.8l-1.1-1.7 1.8-3.1 2 .5a8 8 0 0 1 1.5-.9l.4-2h3.6l.4 2a8 8 0 0 1 1.5.9l2-.5 1.8 3.1-1.1 1.7a7 7 0 0 1-.1 1.8z"/></svg>',
@@ -122,7 +122,7 @@ function role_render(string $role, array $active, string $title, string $subtitl
             ['appointments', 'Appointments', 'appointments.php'],
             ['schedules', 'Vet Schedules', 'schedules.php'],
             ['queue', 'Patient Queue', 'queue.php'],
-            ['grooming', 'Grooming', 'groomer.php'],
+            ['grooming', 'Grooming', '../groomer/appointments.php'],
             ['owners', 'Clients & Pets', 'owners.php'],
             ['services', 'Services', 'services.php'],
             ['billing', 'Billing', 'billing.php'],
@@ -175,13 +175,16 @@ function role_render(string $role, array $active, string $title, string $subtitl
     }
     if ($role === 'staff' && $staffPosition === 'Groomer') {
         $menus['staff'] = [
-            ['dashboard', 'Dashboard', 'staff_dashboard.php'],
-            ['appointments', 'Appointments', 'groomer.php'],
-            ['schedules', 'My Schedule', 'groomer_schedule.php'],
-            ['pets', 'Pet Records', 'pets.php'],
-            ['settings', 'Settings', 'settings.php'],
+            ['dashboard', 'Dashboard', '../groomer/groomer_dashboard.php'],
+            ['appointments', 'Appointments', '../groomer/appointments.php'],
+            ['schedules', 'My Schedule', '../groomer/schedules.php'],
+            ['pets', 'Pet Records', '../groomer/pets.php'],
+            ['settings', 'Settings', '../groomer/settings.php'],
         ];
     }
+    $settingsHref = $role === 'staff' && $staffPosition === 'Groomer'
+        ? '../groomer/settings.php'
+        : 'settings.php';
     $initial = mb_strtoupper(mb_substr($fullName, 0, 1));
     $context = ['pdo' => $pdo, 'userId' => $userId, 'role' => $role];
 
@@ -342,9 +345,15 @@ function role_render(string $role, array $active, string $title, string $subtitl
                 <?php foreach ($notificationItems as $item): ?>
                   <?php
                     $link = (string) ($item['link'] ?? '');
-                    if ($role === 'staff' && $staffPosition === 'Groomer'
-                        && basename((string) parse_url($link, PHP_URL_PATH)) === 'appointments.php') {
-                        $link = 'staff/groomer.php';
+                    if ($role === 'staff' && $staffPosition === 'Groomer') {
+                        $notificationPage = basename((string) parse_url($link, PHP_URL_PATH));
+                        if (in_array($notificationPage, ['appointments.php', 'groomer.php'], true)) {
+                            $link = 'groomer/appointments.php';
+                        } elseif (in_array($notificationPage, ['groomer_schedule.php', 'schedules.php'], true)) {
+                            $link = 'groomer/schedules.php';
+                        } elseif ($notificationPage === 'staff_dashboard.php') {
+                            $link = 'groomer/groomer_dashboard.php';
+                        }
                     }
                     if ($link !== '') {
                         $hash = '';
@@ -369,7 +378,7 @@ function role_render(string $role, array $active, string $title, string $subtitl
           </details>
           <span class="profile-divider" aria-hidden="true"></span>
           <?php if (in_array($role, ['staff', 'vet'], true)): ?>
-            <a class="profile-display" href="settings.php" aria-label="Open account settings">
+            <a class="profile-display" href="<?= e($settingsHref) ?>" aria-label="Open account settings">
               <span class="profile-avatar" aria-hidden="true"><?= e($initial) ?></span>
               <span class="profile-copy"><span class="profile-name"><?= e($fullName) ?></span><small><?= e($profileRoleLabel) ?></small></span>
             </a>

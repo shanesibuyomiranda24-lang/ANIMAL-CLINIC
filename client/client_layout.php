@@ -114,7 +114,7 @@ const APPT_SQL = "SELECT a.appointment_id, a.appointment_date, a.status, a.picku
     FROM Appointments a
     JOIN Pets p ON p.pet_id = a.pet_id
     LEFT JOIN Veterinarians v ON v.vet_id = a.vet_id
-    WHERE p.owner_id = ? AND ";
+    WHERE p.owner_id = ? AND a.archived_at IS NULL AND ";
 
 function client_upcoming(PDO $pdo, int $owner, int $limit = 20, ?string $serviceType = null): array
 {

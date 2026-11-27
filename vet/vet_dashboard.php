@@ -11,21 +11,23 @@ $vetId = (int) $vetStatement->fetchColumn();
 role_render('vet', ['dashboard'], 'Veterinarian Dashboard', 'Assigned patients and consultation activity', function (array $context) use ($pdo, $vetId): void {
     $todayStatement = $pdo->prepare(
         'SELECT COUNT(*) FROM Appointments
-         WHERE vet_id = ? AND appointment_date >= CURRENT_DATE
+         WHERE vet_id = ? AND archived_at IS NULL
+           AND pet_id IN (SELECT pet_id FROM Pets WHERE archived_at IS NULL)
+           AND appointment_date >= CURRENT_DATE
            AND appointment_date < DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY)'
     );
     $todayStatement->execute([$vetId]);
     $todayCount = (int) $todayStatement->fetchColumn();
 
-    $waitingStatement = $pdo->prepare("SELECT COUNT(*) FROM Appointments WHERE vet_id = ? AND status = 'Check-in'");
+    $waitingStatement = $pdo->prepare("SELECT COUNT(*) FROM Appointments WHERE vet_id = ? AND archived_at IS NULL AND pet_id IN (SELECT pet_id FROM Pets WHERE archived_at IS NULL) AND status = 'Check-in'");
     $waitingStatement->execute([$vetId]);
     $waiting = (int) $waitingStatement->fetchColumn();
 
-    $activeStatement = $pdo->prepare("SELECT COUNT(*) FROM Appointments WHERE vet_id = ? AND status = 'In Consultation'");
+    $activeStatement = $pdo->prepare("SELECT COUNT(*) FROM Appointments WHERE vet_id = ? AND archived_at IS NULL AND pet_id IN (SELECT pet_id FROM Pets WHERE archived_at IS NULL) AND status = 'In Consultation'");
     $activeStatement->execute([$vetId]);
     $active = (int) $activeStatement->fetchColumn();
 
-    $completeStatement = $pdo->prepare("SELECT COUNT(*) FROM Appointments WHERE vet_id = ? AND status = 'Complete'");
+    $completeStatement = $pdo->prepare("SELECT COUNT(*) FROM Appointments WHERE vet_id = ? AND archived_at IS NULL AND pet_id IN (SELECT pet_id FROM Pets WHERE archived_at IS NULL) AND status = 'Complete'");
     $completeStatement->execute([$vetId]);
     $complete = (int) $completeStatement->fetchColumn();
 
@@ -35,7 +37,7 @@ role_render('vet', ['dashboard'], 'Veterinarian Dashboard', 'Assigned patients a
          FROM Appointments a
          JOIN Pets p ON p.pet_id = a.pet_id
          JOIN PetOwners o ON o.owner_id = p.owner_id
-         WHERE a.vet_id = ?
+         WHERE a.vet_id = ? AND a.archived_at IS NULL AND p.archived_at IS NULL
            AND a.appointment_date >= CURRENT_DATE
            AND a.appointment_date < DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY)
            AND a.status <> 'Cancelled'
